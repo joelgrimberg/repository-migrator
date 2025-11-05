@@ -36,11 +36,6 @@ nfpms:
     priority: optional
     recommends:
       - git
-    contents:
-      - src: ./dist/repository-migrator_{{ .Version }}_linux_{{ .Arch }}/repository-migrator
-        dst: /usr/bin/repository-migrator
-        file_info:
-          mode: 0755
     bindir: /usr/bin
 
 release:
