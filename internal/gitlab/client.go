@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"gerrit-migrator/internal/logs"
+	"repository-migrator/internal/logs"
 
 	"github.com/go-resty/resty/v2"
 )

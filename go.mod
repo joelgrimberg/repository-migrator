@@ -1,4 +1,4 @@
-module gerrit-migrator
+module repository-migrator
 
 go 1.22.2
 

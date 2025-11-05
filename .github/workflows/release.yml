@@ -6,9 +6,50 @@ on:
       - 'v*'
 
 jobs:
+  changes:
+    name: Detect non-docs changes
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.set.outputs.release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine previous tag
+        id: prev
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${CURRENT_TAG}$" | head -n1 || true)
+          echo "prev=$PREV_TAG" >> "$GITHUB_OUTPUT"
+      - name: Compute changes
+        id: set
+        run: |
+          set -euo pipefail
+          if [ -z "${{ steps.prev.outputs.prev }}" ]; then
+            echo "No previous tag; releasing." >&2
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "${{ steps.prev.outputs.prev }}" "${GITHUB_REF_NAME}")
+          echo "Changed files:\n$CHANGED" >&2
+          # If any file is outside docs/ or not *.md, we release
+          SHOULD_RELEASE=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              docs/*|*.md) ;;
+              *) SHOULD_RELEASE=true ;;
+            esac
+          done <<< "$CHANGED"
+          echo "release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
+
   goreleaser:
     name: Build and Release
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.release == 'true' }}
     permissions:
       contents: write
     steps:
@@ -37,17 +78,13 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     permissions:
       contents: write
+    env:
+      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
     steps:
-      - name: Checkout gh-pages
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: gh-pages
-          path: gh-pages
-          persist-credentials: false
-      - name: Checkout sources
-        uses: actions/checkout@v4
-        with:
-          path: src
+          fetch-depth: 0
 
       - name: Download release assets
         uses: robinraju/release-downloader@v1.10
@@ -60,36 +97,35 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y reprepro gnupg
 
       - name: Import GPG key
-        if: ${{ secrets.APT_GPG_PRIVATE_KEY != '' }}
+        if: ${{ env.APT_GPG_PRIVATE_KEY != '' }}
         run: |
           echo "$APT_GPG_PRIVATE_KEY" | base64 -d > private.key
           gpg --batch --import private.key
-        env:
-          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
 
-      - name: Build repo
+      - name: Build repo under docs/apt on main
         run: |
           set -euo pipefail
-          REPO_DIR=gh-pages/apt
-          mkdir -p "$REPO_DIR/conf" "repo"
+          REPO_DIR=docs/apt
+          mkdir -p "$REPO_DIR/conf" "$REPO_DIR"
           cat > "$REPO_DIR/conf/distributions" <<EOF
-          Origin: gerrit-migrator
-          Label: gerrit-migrator
+          Origin: repository-migrator
+          Label: repository-migrator
           Codename: stable
           Architectures: amd64 arm64
           Components: main
-          Description: Gerrit Migrator APT repo
+          Description: Repository Migrator APT repo
           SignWith: yes
           EOF
           cd "$REPO_DIR"
           for deb in ../../debs/*.deb; do
             reprepro --basedir . includedeb stable "$deb"
           done
-
-      - name: Publish gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Commit APT repo to docs/ on main
+        uses: EndBug/add-and-commit@v9
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: gh-pages
-          publish_branch: gh-pages
+          add: |
+            docs/apt
+          message: "chore(apt): update APT repo for ${{ github.ref_name }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

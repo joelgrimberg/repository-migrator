@@ -1,11 +1,11 @@
-project_name: gerrit-migrator
+project_name: repository-migrator
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: gerrit-migrator
+  - id: repository-migrator
     main: ./main.go
     env:
       - CGO_ENABLED=0
@@ -13,31 +13,32 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
+    binary: repository-migrator
 
 archives:
   - id: tarballs
     format: tar.gz
-    builds: [gerrit-migrator]
+    builds: [repository-migrator]
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
     files:
       - README.md
 
 nfpms:
   - id: deb
-    package_name: gerrit-migrator
+    package_name: repository-migrator
     formats: [deb]
     maintainer: Maintainers <noreply@example.com>
-    description: Git repository migrator to GitLab with safe FF mode and mirroring
+    description: Repository migrator to GitLab with safe FF mode and mirroring
     homepage: https://github.com/OWNER/REPO
     license: MIT
-    vendor: Gerrit Migrator
+    vendor: Repository Migrator
     section: utils
     priority: optional
     recommends:
       - git
     contents:
-      - src: ./dist/gerrit-migrator_{{ .Version }}_linux_{{ .Arch }}/gerrit-migrator
-        dst: /usr/bin/gerrit-migrator
+      - src: ./dist/repository-migrator_{{ .Version }}_linux_{{ .Arch }}/repository-migrator
+        dst: /usr/bin/repository-migrator
         file_info:
           mode: 0755
     bindir: /usr/bin

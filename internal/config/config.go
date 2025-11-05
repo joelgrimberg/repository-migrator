@@ -19,7 +19,7 @@ func configDir() (string, error) {
     if err != nil {
         return "", fmt.Errorf("resolve home dir: %w", err)
     }
-    return filepath.Join(home, ".config", "gerrit-migrator"), nil
+    return filepath.Join(home, ".config", "repository-migrator"), nil
 }
 
 func configPath() (string, error) {

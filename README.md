@@ -1,4 +1,4 @@
-# Gerrit Migrator (Git repo to GitLab)
+# Repository Migrator (Git repo to GitLab)
 
 A Go CLI to migrate any Git repository to GitLab. It remembers your GitLab domain, token, and preferred target namespace. It supports non-destructive fast‑forward migrations by default, optional overwrite mirroring, subgroup auto-creation, trial runs, and detailed run logs.
 
@@ -20,13 +20,13 @@ A Go CLI to migrate any Git repository to GitLab. It remembers your GitLab domai
 ```bash
 cd /Users/joel/code/active_projects/gerrit-migrator
 go mod tidy
-go build -o gerrit-migrator
+go build -o repository-migrator
 ```
 
 ## Quick start
 
 ```bash
-./gerrit-migrator
+./repository-migrator
 ```
 
 You will be prompted for:
@@ -62,18 +62,18 @@ Environment variables (optional):
 
 ## Where configuration is stored
 
-- `~/.config/gerrit-migrator/config.json`
+- `~/.config/repository-migrator/config.json`
   - Saves: GitLab base URL, token, and default group/subgroup path
   - Token is never printed to screen or logs
 
 ## Logs
 
 - Summary log (one line per run):
-  - `~/.config/gerrit-migrator/migrations.log`
+- `~/.config/repository-migrator/migrations.log`
   - Includes timestamp, source, target, outcome (passed/failed/trial)
 
 - Detailed run logs (per run):
-  - `~/.config/gerrit-migrator/runs/run-YYYYMMDDTHHMMSS±ZZZZ.log`
+- `~/.config/repository-migrator/runs/run-YYYYMMDDTHHMMSS±ZZZZ.log`
   - Includes config used, source URL, group creation steps, project details, fast‑forward analysis, push mode, errors, and GitLab API calls (method, URL, status, truncated body)
 
 ## Notes and caveats
@@ -83,13 +83,13 @@ Environment variables (optional):
 If you enable the GitHub Pages APT repo in this repository and configure the `APT_GPG_PRIVATE_KEY` secret (base64‑encoded) for signing, you can install on Ubuntu as follows:
 
 ```bash
-echo "deb [signed-by=/usr/share/keyrings/gerrit-migrator.gpg] https://<your-github-username>.github.io/<your-repo>/apt stable main" | sudo tee /etc/apt/sources.list.d/gerrit-migrator.list
+echo "deb [signed-by=/usr/share/keyrings/repository-migrator.gpg] https://<your-github-username>.github.io/<your-repo>/apt stable main" | sudo tee /etc/apt/sources.list.d/repository-migrator.list
 
 # import the public key (export it from your GPG key and host alongside the repo or provide a URL)
-curl -sSL https://<your-github-username>.github.io/<your-repo>/apt/public.key | sudo gpg --dearmor -o /usr/share/keyrings/gerrit-migrator.gpg
+curl -sSL https://<your-github-username>.github.io/<your-repo>/apt/public.key | sudo gpg --dearmor -o /usr/share/keyrings/repository-migrator.gpg
 
 sudo apt update
-sudo apt install gerrit-migrator
+sudo apt install repository-migrator
 ```
 
 Release pipeline:
