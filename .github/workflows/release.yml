@@ -6,50 +6,50 @@ on:
       - 'v*'
 
 jobs:
-  changes:
-    name: Detect non-docs changes
-    runs-on: ubuntu-latest
-    outputs:
-      release: ${{ steps.set.outputs.release }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Determine previous tag
-        id: prev
-        run: |
-          set -euo pipefail
-          CURRENT_TAG="${GITHUB_REF_NAME}"
-          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${CURRENT_TAG}$" | head -n1 || true)
-          echo "prev=$PREV_TAG" >> "$GITHUB_OUTPUT"
-      - name: Compute changes
-        id: set
-        run: |
-          set -euo pipefail
-          if [ -z "${{ steps.prev.outputs.prev }}" ]; then
-            echo "No previous tag; releasing." >&2
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          CHANGED=$(git diff --name-only "${{ steps.prev.outputs.prev }}" "${GITHUB_REF_NAME}")
-          echo "Changed files:\n$CHANGED" >&2
-          # If any file is outside docs/ or not *.md, we release
-          SHOULD_RELEASE=false
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            case "$f" in
-              docs/*|*.md) ;;
-              *) SHOULD_RELEASE=true ;;
-            esac
-          done <<< "$CHANGED"
-          echo "release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
+  # changes:
+  #   name: Detect non-docs changes
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     release: ${{ steps.set.outputs.release }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #     - name: Determine previous tag
+  #       id: prev
+  #       run: |
+  #         set -euo pipefail
+  #         CURRENT_TAG="${GITHUB_REF_NAME}"
+  #         PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${CURRENT_TAG}$" | head -n1 || true)
+  #         echo "prev=$PREV_TAG" >> "$GITHUB_OUTPUT"
+  #     - name: Compute changes
+  #       id: set
+  #       run: |
+  #         set -euo pipefail
+  #         if [ -z "${{ steps.prev.outputs.prev }}" ]; then
+  #           echo "No previous tag; releasing." >&2
+  #           echo "release=true" >> "$GITHUB_OUTPUT"
+  #           exit 0
+  #         fi
+  #         CHANGED=$(git diff --name-only "${{ steps.prev.outputs.prev }}" "${GITHUB_REF_NAME}")
+  #         echo "Changed files:\n$CHANGED" >&2
+  #         # If any file is outside docs/ or not *.md, we release
+  #         SHOULD_RELEASE=false
+  #         while IFS= read -r f; do
+  #           [ -z "$f" ] && continue
+  #           case "$f" in
+  #             docs/*|*.md) ;;
+  #             *) SHOULD_RELEASE=true ;;
+  #           esac
+  #         done <<< "$CHANGED"
+  #         echo "release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
 
   goreleaser:
     name: Build and Release
     runs-on: ubuntu-latest
-    needs: changes
-    if: ${{ needs.changes.outputs.release == 'true' }}
+    # needs: changes
+    # if: ${{ needs.changes.outputs.release == 'true' }}
     permissions:
       contents: write
     steps:
