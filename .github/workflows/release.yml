@@ -161,14 +161,35 @@ jobs:
           fi
           echo "Pool directory structure:"
           find pool -type f -name "*.deb" || echo "No .deb files found in pool"
+      - name: Verify files before commit
+        run: |
+          echo "Checking what files exist in docs/apt:"
+          find docs/apt -type f | head -20
+          echo ""
+          echo "Checking pool directory:"
+          ls -la docs/apt/pool/main/r/repository-migrator/ 2>&1 || echo "Pool directory not found"
+          echo ""
+          echo "Checking git status:"
+          git status --porcelain docs/apt/ | head -20
       - name: Commit APT repo to docs/ on main
-        uses: EndBug/add-and-commit@v9
-        with:
-          add: |
-            docs/apt
-            docs/.nojekyll
-          message: "chore(apt): update APT repo for ${{ github.ref_name }}"
-          push: true
+        run: |
+          set -e
+          # Configure git for pushing
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          # Explicitly add all files in docs/apt including pool directory
+          git add -f docs/apt/ docs/.nojekyll
+          # Verify pool files are staged
+          echo "Staged files:"
+          git diff --cached --name-only | grep "docs/apt" | head -20
+          # Commit if there are changes
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore(apt): update APT repo for ${{ github.ref_name }}"
+            git push origin main
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
