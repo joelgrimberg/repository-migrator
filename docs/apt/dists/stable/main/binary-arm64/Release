@@ -1,0 +1,5 @@
+Component: main
+Origin: repository-migrator
+Label: repository-migrator
+Architecture: arm64
+Description: Repository Migrator APT repo
