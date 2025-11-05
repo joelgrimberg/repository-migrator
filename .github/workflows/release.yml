@@ -1,0 +1,95 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  goreleaser:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  apt-repo:
+    name: Publish APT Repository (gh-pages)
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+          persist-credentials: false
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.10
+        with:
+          tag: ${{ github.ref_name }}
+          out-file-path: debs
+          fileName: '*linux_*.deb'
+
+      - name: Install reprepro
+        run: sudo apt-get update && sudo apt-get install -y reprepro gnupg
+
+      - name: Import GPG key
+        if: ${{ secrets.APT_GPG_PRIVATE_KEY != '' }}
+        run: |
+          echo "$APT_GPG_PRIVATE_KEY" | base64 -d > private.key
+          gpg --batch --import private.key
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+
+      - name: Build repo
+        run: |
+          set -euo pipefail
+          REPO_DIR=gh-pages/apt
+          mkdir -p "$REPO_DIR/conf" "repo"
+          cat > "$REPO_DIR/conf/distributions" <<EOF
+          Origin: gerrit-migrator
+          Label: gerrit-migrator
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: Gerrit Migrator APT repo
+          SignWith: yes
+          EOF
+          cd "$REPO_DIR"
+          for deb in ../../debs/*.deb; do
+            reprepro --basedir . includedeb stable "$deb"
+          done
+
+      - name: Publish gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: gh-pages
+          publish_branch: gh-pages
+
