@@ -29,7 +29,7 @@ nfpms:
     formats: [deb]
     maintainer: Maintainers <noreply@example.com>
     description: Repository migrator to GitLab with safe FF mode and mirroring
-    homepage: https://github.com/OWNER/REPO
+    homepage: https://github.com/joelgrimberg/repository-migrator
     license: MIT
     vendor: Repository Migrator
     section: utils
@@ -45,8 +45,8 @@ nfpms:
 
 release:
   github:
-    owner: OWNER
-    name: REPO
+    owner: joelgrimberg
+    name: repository-migrator
   draft: false
   prerelease: auto
 
