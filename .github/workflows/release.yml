@@ -136,6 +136,8 @@ jobs:
           add: |
             docs/apt
           message: "chore(apt): update APT repo for ${{ github.ref_name }}"
+          branch: main
+          push: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
