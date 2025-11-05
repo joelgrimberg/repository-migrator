@@ -107,6 +107,8 @@ jobs:
           set -euo pipefail
           REPO_DIR=docs/apt
           mkdir -p "$REPO_DIR/conf" "$REPO_DIR"
+          # ensure Pages serves as static (no Jekyll processing)
+          touch docs/.nojekyll
           cat > "$REPO_DIR/conf/distributions" <<EOF
           Origin: repository-migrator
           Label: repository-migrator
