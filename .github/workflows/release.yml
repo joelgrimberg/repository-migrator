@@ -130,13 +130,16 @@ jobs:
           for deb in ../../debs/*.deb; do
             reprepro --basedir . includedeb stable "$deb"
           done
+      - name: Ensure main branch checked out
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
       - name: Commit APT repo to docs/ on main
         uses: EndBug/add-and-commit@v9
         with:
           add: |
             docs/apt
           message: "chore(apt): update APT repo for ${{ github.ref_name }}"
-          branch: main
           push: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
