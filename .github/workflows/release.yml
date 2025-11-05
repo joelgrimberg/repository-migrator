@@ -141,6 +141,16 @@ jobs:
           for deb in ../../debs/*.deb; do
             if [ -f "$deb" ]; then
               echo "Adding $deb to repository..."
+              pkg=$(dpkg-deb -f "$deb" Package)
+              ver=$(dpkg-deb -f "$deb" Version)
+              echo "Processing package: $pkg version: $ver"
+              # If same version already exists, remove it to avoid checksum mismatch
+              if reprepro --basedir . list stable "$pkg" | grep -q " $ver "; then
+                echo "Existing $pkg $ver found in 'stable'; removing before re-adding..."
+                reprepro --basedir . remove stable "$pkg" || true
+                # Clean unreferenced files from pool
+                reprepro --basedir . deleteunreferenced || true
+              fi
               reprepro --basedir . includedeb stable "$deb"
             fi
           done
