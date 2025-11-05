@@ -53,10 +53,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout main
+      - name: Checkout tag commit
         uses: actions/checkout@v4
         with:
-          ref: main
+          # Checkout the tag that triggered the workflow so GoReleaser sees the correct tag/commit
+          ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Set up Go
