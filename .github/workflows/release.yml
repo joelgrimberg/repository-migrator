@@ -102,6 +102,13 @@ jobs:
           echo "$APT_GPG_PRIVATE_KEY" | base64 -d > private.key
           gpg --batch --import private.key
 
+      - name: Export public key to docs/apt/public.key
+        if: ${{ env.APT_GPG_PRIVATE_KEY != '' }}
+        run: |
+          mkdir -p docs/apt
+          # export all public keys; ideally scope to your signing key
+          gpg --armor --export > docs/apt/public.key
+
       - name: Build repo under docs/apt on main
         run: |
           set -euo pipefail
