@@ -92,7 +92,7 @@ jobs:
         with:
           tag: ${{ github.ref_name }}
           out-file-path: debs
-          fileName: '*linux_*.deb'
+          fileName: '*.deb'
 
       - name: Install reprepro
         run: sudo apt-get update && sudo apt-get install -y reprepro gnupg
