@@ -1,0 +1,7 @@
+Origin: repository-migrator
+Label: repository-migrator
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: Repository Migrator APT repo
+SignWith: yes

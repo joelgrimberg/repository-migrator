@@ -1,0 +1,28 @@
+Origin: repository-migrator
+Label: repository-migrator
+Codename: stable
+Date: Wed, 05 Nov 2025 15:05:57 UTC
+Architectures: amd64 arm64
+Components: main
+Description: Repository Migrator APT repo
+MD5Sum:
+ 46207f61eadb8ca4f42fa7541180036c 585 main/binary-amd64/Packages
+ fa5e0288d43061731dec090a346fb7c8 405 main/binary-amd64/Packages.gz
+ a7dbdbb71c04b5df6dbe9af37611e663 133 main/binary-amd64/Release
+ ffac57641b2358c3cd85e8a722887b67 585 main/binary-arm64/Packages
+ dd8b473109ad31c9ed5c44c9410f628b 401 main/binary-arm64/Packages.gz
+ 894a60f61c7e97a4180ae5a49a2a3e77 133 main/binary-arm64/Release
+SHA1:
+ 120a265bb45729db2246844ec3283ab1f4893bff 585 main/binary-amd64/Packages
+ 669e525f07cf888e80e8c140ab2d23aa95e45f26 405 main/binary-amd64/Packages.gz
+ 70c64bea28454c9101925f6a2b3f97e7f0be0636 133 main/binary-amd64/Release
+ 3002f9cc9dc254780a2770ccce595344bc6ebe03 585 main/binary-arm64/Packages
+ c4c5aa5f331eeeb8db05732f4ada5f74744da176 401 main/binary-arm64/Packages.gz
+ 384f395157f0ae900fdcab8c55473202a44ae89c 133 main/binary-arm64/Release
+SHA256:
+ 52893d83bc1caa0e19765e5bf72d8d1c23bde20d585dc852531d35611fa5ef5d 585 main/binary-amd64/Packages
+ 9d0ca02c858afc01b5970be5fed01e4812c817d5c826e619aa91c0d7de5c48cf 405 main/binary-amd64/Packages.gz
+ bcd3fb294a86ab8640ab69f88f17f27353d36546f3a079ad2b623f3af7995b0a 133 main/binary-amd64/Release
+ 07c809b006ebcc548107bdd916abb5860a09cedf93414ae99abf278df5ecbd1f 585 main/binary-arm64/Packages
+ 857d67e1a0f0afe230dbfd38782eb8d97fbe52c767229c534b08c2ad714a533f 401 main/binary-arm64/Packages.gz
+ 6e83823aa07d8b125f9cdd0b923374fc8bca959ccacee56ba02b90305543825a 133 main/binary-arm64/Release
