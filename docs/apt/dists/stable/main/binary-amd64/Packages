@@ -1,5 +1,5 @@
 Package: repository-migrator
-Version: 1.0.11
+Version: 1.0.12
 Architecture: amd64
 License: MIT
 Maintainer: Maintainers <noreply@example.com>
@@ -8,10 +8,10 @@ Recommends: git
 Homepage: https://github.com/joelgrimberg/repository-migrator
 Priority: optional
 Section: utils
-Filename: pool/main/r/repository-migrator/repository-migrator_1.0.11_amd64.deb
+Filename: pool/main/r/repository-migrator/repository-migrator_1.0.12_amd64.deb
 Size: 2620544
-SHA256: bd9788f7e41f764cd14e588a7c8c0b70e1320b56bd27f71450588099f4ce7e19
-SHA1: b7e06d92ceebe619c105d876674ed2c997b1cff5
-MD5sum: 060a2c6b029ab3cea2a45026406f9c11
+SHA256: 08a45267b7889cbba500614c387b302ac91fdf62a49d3b6209d0db4d00cafe7e
+SHA1: 9f948d10fc7380bb29ebd46d3fdf41e388aa7045
+MD5sum: e0a084a7dbc1dd361f94c4e92a1321dc
 Description: Repository migrator to GitLab with safe FF mode and mirroring
 
