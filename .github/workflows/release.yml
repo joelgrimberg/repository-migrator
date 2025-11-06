@@ -75,6 +75,7 @@ jobs:
     name: Build and Release
     runs-on: ubuntu-latest
     needs: test
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     # needs: changes
     # if: ${{ needs.changes.outputs.release == 'true' }}
     permissions:
@@ -171,13 +172,13 @@ jobs:
               pkg=$(dpkg-deb -f "$deb" Package)
               ver=$(dpkg-deb -f "$deb" Version)
               echo "Processing package: $pkg version: $ver"
-              # If same version already exists, remove it to avoid checksum mismatch
-              if reprepro --basedir . list stable "$pkg" | grep -q " $ver "; then
-                echo "Existing $pkg $ver found in 'stable'; removing before re-adding..."
-                reprepro --basedir . remove stable "$pkg" || true
-                # Clean unreferenced files from pool
-                reprepro --basedir . deleteunreferenced || true
-              fi
+              # Always try to remove existing package to avoid checksum mismatches
+              # This is safe even if the package doesn't exist (errors are ignored)
+              echo "Removing any existing $pkg from 'stable'..."
+              reprepro --basedir . remove stable "$pkg" || true
+              # Clean unreferenced files from pool to ensure clean state
+              reprepro --basedir . deleteunreferenced || true
+              # Add the package (will fail if file is corrupted, but that's expected)
               reprepro --basedir . includedeb stable "$deb"
             fi
           done
