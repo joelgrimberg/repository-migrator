@@ -253,10 +253,10 @@ jobs:
           echo "Found .rpm files:"
           ls -lh rpms/*.rpm
 
-      - name: Install createrepo_c and rpm-sign
+      - name: Install createrepo_c and gpg
         run: |
           sudo apt-get update
-          sudo apt-get install -y createrepo-c rpm-sign gnupg
+          sudo apt-get install -y createrepo-c gnupg
 
       - name: Import GPG key
         if: ${{ env.YUM_GPG_PRIVATE_KEY != '' }}
