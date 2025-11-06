@@ -286,9 +286,10 @@ jobs:
           # Create repository metadata
           cd "$REPO_DIR"
           createrepo_c --update .
-          # GPG sign the repository metadata
+          # GPG sign the repository metadata (non-interactive)
           if [ -n "$YUM_GPG_PRIVATE_KEY" ]; then
-            gpg --detach-sign --armor repodata/repomd.xml
+            gpg --batch --yes --no-tty --pinentry-mode loopback \
+              --detach-sign --armor repodata/repomd.xml
           fi
           echo "YUM repository structure:"
           find . -type f | head -20
