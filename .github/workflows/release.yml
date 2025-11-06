@@ -206,6 +206,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          # Rebase onto latest main to avoid non-FF push when multiple jobs modify docs/
+          git fetch origin main
+          git checkout main
+          git pull --rebase origin main || true
           # Explicitly add all files in docs/apt including pool directory
           git add -f docs/apt/ docs/.nojekyll
           # Verify pool files are staged
@@ -216,14 +220,15 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore(apt): update APT repo for ${{ github.ref_name }}"
-            git push origin main
+            # Retry push once on non-FF
+            git push origin main || (git pull --rebase origin main && git push origin main)
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   yum-repo:
     name: Publish YUM Repository (gh-pages)
-    needs: goreleaser
+    needs: apt-repo
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     permissions:
@@ -302,6 +307,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          # Rebase onto latest main to avoid non-FF push when multiple jobs modify docs/
+          git fetch origin main
+          git checkout main
+          git pull --rebase origin main || true
           git add -f docs/yum/ docs/.nojekyll
           echo "Staged files:"
           git diff --cached --name-only | grep "docs/yum" | head -20
@@ -309,7 +318,8 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore(yum): update YUM repo for ${{ github.ref_name }}"
-            git push origin main
+            # Retry push once on non-FF
+            git push origin main || (git pull --rebase origin main && git push origin main)
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
