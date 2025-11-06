@@ -39,6 +39,54 @@ After installation, run:
 repository-migrator
 ```
 
+### RHEL/AlmaLinux/CentOS (via YUM/DNF)
+
+Add the YUM repository and install:
+
+```bash
+# Import the GPG key
+curl -sSL https://joelgrimberg.github.io/repository-migrator/yum/public.key | sudo gpg --dearmor -o /etc/pki/rpm-gpg/RPM-GPG-KEY-repository-migrator
+
+# Add the repository (for DNF/dnf-based systems)
+sudo tee /etc/yum.repos.d/repository-migrator.repo <<EOF
+[repository-migrator]
+name=Repository Migrator
+baseurl=https://joelgrimberg.github.io/repository-migrator/yum
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-repository-migrator
+EOF
+
+# Update and install
+sudo dnf install repository-migrator
+# or on older systems
+sudo yum install repository-migrator
+```
+
+After installation, run:
+
+```bash
+repository-migrator
+```
+
+#### Alternative: Manual RPM install
+
+Download the latest `.rpm` from the GitHub Release page and install:
+
+```bash
+# Example for x86_64
+sudo dnf install ./repository-migrator-<version>-1.x86_64.rpm
+# or on older systems
+yum localinstall ./repository-migrator-<version>-1.x86_64.rpm
+```
+
+#### Alternative: Tarball (no root install required)
+
+```bash
+tar -xzf repository-migrator_<version>_linux_amd64.tar.gz
+sudo mv repository-migrator /usr/local/bin/
+```
+
 ### Build from source
 
 ```bash
@@ -46,6 +94,18 @@ cd /Users/joel/code/active_projects/gerrit-migrator
 go mod tidy
 go build -o repository-migrator
 ```
+
+## Supported platforms
+
+- Linux: amd64, arm64
+  - Ubuntu/Debian: `.deb` via APT or tarball
+  - RHEL/AlmaLinux/CentOS: `.rpm` via YUM/DNF or tarball
+- macOS: amd64, arm64 (tarball)
+
+Notes:
+
+- Binaries are built with `CGO_ENABLED=0` for portability.
+- `git` must be available on `PATH`.
 
 ## Quick start
 
@@ -81,7 +141,7 @@ The tool then creates/reuses the project and migrates according to the selected 
 
 Environment variables (optional):
 
-- `GITLAB_BASE_URL` – base URL (e.g., [https://gitlab.com](https://gitlab.com))
+- `GITLAB_BASE_URL` – base URL (e.g., <https://gitlab.com>)
 - `GITLAB_TOKEN` – Personal Access Token (scope: api)
 
 ## Where configuration is stored
@@ -105,8 +165,8 @@ Environment variables (optional):
 Release pipeline:
 
 - Push a tag like `v1.0.0` to trigger the GitHub Actions workflow
-- GoReleaser builds tarballs and `.deb` packages and publishes a GitHub Release
-- The workflow publishes an APT repository to the `gh-pages` branch under `apt/`
+- GoReleaser builds tarballs and `.deb` and `.rpm` packages, and publishes a GitHub Release
+- The workflow publishes APT and YUM repositories to the `gh-pages` branch under `apt/` and `yum/`
 
 - Requires `git` available on PATH
 - Default safe mode will not overwrite diverged refs or prune target-only refs

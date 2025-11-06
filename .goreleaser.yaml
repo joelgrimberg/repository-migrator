@@ -28,7 +28,7 @@ archives:
 nfpms:
   - id: deb
     package_name: repository-migrator
-    formats: [deb]
+    formats: [deb, rpm]
     maintainer: Maintainers <noreply@example.com>
     description: Repository migrator to GitLab with safe FF mode and mirroring
     homepage: https://github.com/joelgrimberg/repository-migrator
