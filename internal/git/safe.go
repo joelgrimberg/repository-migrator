@@ -59,7 +59,7 @@ func SafeRebaseAndPush(ctx context.Context, srcURL, targetURL, workDir string) e
                 return fmt.Errorf("rebase for branch %s has conflicts or failed:\n%s", b, string(out))
             }
             // successful rebase but do not overwrite; stop and ask user to review
-            return fmt.Errorf("branch %s diverged: a clean rebase is possible. Review locally before pushing.")
+            return fmt.Errorf("branch %s diverged: a clean rebase is possible. Review locally before pushing.", b)
         }
     }
 
