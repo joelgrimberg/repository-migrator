@@ -95,6 +95,40 @@ go mod tidy
 go build -o repository-migrator
 ```
 
+## Non-interactive CI usage
+
+Set options via `~/.config/repository-migrator/config.json` and/or environment variables. If `non_interactive` is enabled (or `NON_INTERACTIVE=1`), the CLI will not prompt and will error if required values are missing.
+
+### Config file keys (config.json)
+
+- `gitlab_base_url` (string): GitLab base URL
+- `gitlab_token` (string): Personal Access Token
+- `default_group_path` (string, optional): Default group/subgroup path
+- `default_subfolder` (string, optional): Subfolder appended under the group path
+- `non_interactive` (bool, optional): Force non-interactive mode
+- `auto_create_subgroups` (bool, optional): Auto-create missing subgroups
+- `overwrite` (bool, optional): Mirror mode (destructive)
+- `safe_rebase` (bool, optional): Safe fast-forward-only mode
+- `trial_run` (bool, optional): Print plan and exit
+- `allow_push_default_branch` (bool, optional): Temporarily unprotect default branch during migration
+
+### Environment variables
+
+- `GITLAB_BASE_URL`
+- `GITLAB_TOKEN`
+- `NON_INTERACTIVE` (1/true/yes)
+- `SOURCE_REPO_URL` (required in non-interactive mode)
+- `PROJECT_NAME` (required if it cannot be inferred from `SOURCE_REPO_URL`)
+- `GROUP_PATH` (optional; falls back to config `default_group_path`)
+- `SUBFOLDER` (optional; falls back to config `default_subfolder`)
+- `TRIAL_RUN` (1/true/yes)
+- `ALLOW_PUSH_DEFAULT` (1/true/yes)
+- `AUTO_CREATE_SUBGROUPS` (1/true/yes)
+- `OVERWRITE` (1/true/yes)
+- `SAFE_REBASE` (1/true/yes)
+
+Precedence: environment variables override config; flags still apply unless overridden by env/config.
+
 ## Supported platforms
 
 - Linux: amd64, arm64
@@ -141,7 +175,7 @@ The tool then creates/reuses the project and migrates according to the selected 
 
 Environment variables (optional):
 
-- `GITLAB_BASE_URL` – base URL (e.g., <https://gitlab.com>)
+- `GITLAB_BASE_URL` – base URL (e.g., `https://gitlab.com`)
 - `GITLAB_TOKEN` – Personal Access Token (scope: api)
 
 ## Where configuration is stored

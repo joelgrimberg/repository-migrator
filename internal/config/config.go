@@ -9,9 +9,16 @@ import (
 )
 
 type AppConfig struct {
-    GitLabBaseURL string `json:"gitlab_base_url"`
-    GitLabToken   string `json:"gitlab_token"`
-    DefaultGroupPath string `json:"default_group_path,omitempty"`
+    GitLabBaseURL        string `json:"gitlab_base_url"`
+    GitLabToken          string `json:"gitlab_token"`
+    DefaultGroupPath     string `json:"default_group_path,omitempty"`
+    DefaultSubfolder     string `json:"default_subfolder,omitempty"`
+    NonInteractive       bool   `json:"non_interactive,omitempty"`
+    AutoCreateSubgroups  *bool  `json:"auto_create_subgroups,omitempty"`
+    Overwrite            *bool  `json:"overwrite,omitempty"`
+    SafeRebase           *bool  `json:"safe_rebase,omitempty"`
+    TrialRun             *bool  `json:"trial_run,omitempty"`
+    AllowPushDefault     *bool  `json:"allow_push_default_branch,omitempty"`
 }
 
 func configDir() (string, error) {

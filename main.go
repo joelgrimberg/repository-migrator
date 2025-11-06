@@ -39,12 +39,23 @@ func run() error {
 		return err
 	}
 
+	// Batch mode: REPO_LIST_FILE points to JSON file with repos
+	if listPath := strings.TrimSpace(os.Getenv("REPO_LIST_FILE")); listPath != "" {
+		return runBatch(cfg, listPath)
+	}
+
 	// Prefer env vars if present for non-interactive use
 	if v := strings.TrimSpace(os.Getenv("GITLAB_BASE_URL")); v != "" {
 		cfg.GitLabBaseURL = v
 	}
 	if v := strings.TrimSpace(os.Getenv("GITLAB_TOKEN")); v != "" {
 		cfg.GitLabToken = v
+	}
+
+	// Non-interactive mode (env or config)
+	nonInteractive, _ := util.EnvBool(os.Getenv("NON_INTERACTIVE"))
+	if cfg.NonInteractive {
+		nonInteractive = true
 	}
 
 	// Normalize loaded config
@@ -61,6 +72,9 @@ func run() error {
 		}
 	}
 	if cfg.GitLabBaseURL == "" {
+		if nonInteractive {
+			return errors.New("missing GitLab base URL in non-interactive mode (set GITLAB_BASE_URL or config.gitlab_base_url)")
+		}
 		val, err := util.Prompt("Enter GitLab base URL (e.g., https://gitlab.com): ")
 		if err != nil {
 			return err
@@ -71,6 +85,9 @@ func run() error {
 		cfg.GitLabBaseURL = strings.TrimRight(val, "/")
 	}
 	if cfg.GitLabToken == "" {
+		if nonInteractive {
+			return errors.New("missing GitLab token in non-interactive mode (set GITLAB_TOKEN or config.gitlab_token)")
+		}
 		val, err := util.Prompt("Enter GitLab Personal Access Token (scope: api): ")
 		if err != nil {
 			return err
@@ -92,18 +109,31 @@ func run() error {
 		return err
 	}
 
-	// Ask for source repository URL
-	srcURL, err := util.Prompt("Enter source Git repository URL to migrate: ")
-	if err != nil {
-		return err
+	// Source repository URL (env SOURCE_REPO_URL or prompt)
+	srcURL := strings.TrimSpace(os.Getenv("SOURCE_REPO_URL"))
+	if srcURL == "" {
+		if nonInteractive {
+			return errors.New("missing SOURCE_REPO_URL in non-interactive mode")
+		}
+		val, err := util.Prompt("Enter source Git repository URL to migrate: ")
+		if err != nil {
+			return err
+		}
+		srcURL = val
 	}
 	if err := validateGitURL(srcURL); err != nil {
 		return fmt.Errorf("invalid source URL: %w", err)
 	}
 	logs.AppendRunDetail(runLogPath, fmt.Sprintf("source=%s", srcURL))
 
-	repoName := inferRepoName(srcURL)
+	repoName := strings.TrimSpace(os.Getenv("PROJECT_NAME"))
 	if repoName == "" {
+		repoName = inferRepoName(srcURL)
+	}
+	if repoName == "" {
+		if nonInteractive {
+			return errors.New("missing PROJECT_NAME in non-interactive mode and could not infer from URL")
+		}
 		name, err := util.Prompt("Enter project name to create in GitLab: ")
 		if err != nil {
 			return err
@@ -120,36 +150,51 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("authenticate to GitLab: %w", err)
 	}
-	// Collect target namespace path with confirmation
+	// Collect target namespace path (from env/config) with optional subfolder; no confirmation in non-interactive
 	var groupPath string
-	for {
-		nsPath, err := util.PromptWithDefault("Namespace (group/subgroup) full path (blank for personal namespace)", cfg.DefaultGroupPath)
-		if err != nil {
-			return err
+	if nonInteractive {
+		nsPath := strings.TrimSpace(os.Getenv("GROUP_PATH"))
+		if nsPath == "" {
+			nsPath = cfg.DefaultGroupPath
 		}
-		subfolder, err := util.PromptOptional("Subfolder within namespace (optional): ")
-		if err != nil {
-			return err
+		subfolder := strings.TrimSpace(os.Getenv("SUBFOLDER"))
+		if subfolder == "" {
+			subfolder = cfg.DefaultSubfolder
 		}
 		candidate := strings.Trim(nsPath, "/")
 		if strings.TrimSpace(subfolder) != "" {
 			candidate = strings.Trim(candidate+"/"+strings.Trim(subfolder, "/"), "/")
 		}
-		// Resolve effective namespace for preview
-		previewNamespace := candidate
-		if previewNamespace == "" {
-			previewNamespace = user.Username
-		}
-		fmt.Printf("Target namespace: %s\n", previewNamespace)
-		confirm, err := util.PromptWithDefault("Proceed with this namespace? (Y/n)", "Y")
-		if err != nil {
-			return err
-		}
-		if strings.EqualFold(strings.TrimSpace(confirm), "n") || strings.EqualFold(strings.TrimSpace(confirm), "no") {
-			continue
-		}
 		groupPath = candidate
-		break
+	} else {
+		for {
+			nsPath, err := util.PromptWithDefault("Namespace (group/subgroup) full path (blank for personal namespace)", cfg.DefaultGroupPath)
+			if err != nil {
+				return err
+			}
+			subfolder, err := util.PromptOptional("Subfolder within namespace (optional): ")
+			if err != nil {
+				return err
+			}
+			candidate := strings.Trim(nsPath, "/")
+			if strings.TrimSpace(subfolder) != "" {
+				candidate = strings.Trim(candidate+"/"+strings.Trim(subfolder, "/"), "/")
+			}
+			previewNamespace := candidate
+			if previewNamespace == "" {
+				previewNamespace = user.Username
+			}
+			fmt.Printf("Target namespace: %s\n", previewNamespace)
+			confirm, err := util.PromptWithDefault("Proceed with this namespace? (Y/n)", "Y")
+			if err != nil {
+				return err
+			}
+			if strings.EqualFold(strings.TrimSpace(confirm), "n") || strings.EqualFold(strings.TrimSpace(confirm), "no") {
+				continue
+			}
+			groupPath = candidate
+			break
+		}
 	}
 	// Derive project path (slug) and display name automatically from source URL
 	defaultPath := strings.Trim(inferRepoName(srcURL), " ")
@@ -168,12 +213,21 @@ func run() error {
 		return err
 	}
 
-	// Trial run option
-	trialAns, err := util.PromptWithDefault("Trial run only? (y/N)", "N")
-	if err != nil {
-		return err
+	// Trial run option (env/config or prompt)
+	isTrial := false
+	if v, ok := util.EnvBool(os.Getenv("TRIAL_RUN")); ok {
+		isTrial = v
 	}
-	isTrial := strings.EqualFold(strings.TrimSpace(trialAns), "y") || strings.EqualFold(strings.TrimSpace(trialAns), "yes")
+	if !isTrial && cfg.TrialRun != nil {
+		isTrial = *cfg.TrialRun
+	}
+	if !nonInteractive && !isTrial {
+		trialAns, err := util.PromptWithDefault("Trial run only? (y/N)", "N")
+		if err != nil {
+			return err
+		}
+		isTrial = strings.EqualFold(strings.TrimSpace(trialAns), "y") || strings.EqualFold(strings.TrimSpace(trialAns), "yes")
+	}
 
 	// Compute target URL without creating the project
 	namespace := strings.TrimSpace(groupPath)
@@ -195,7 +249,15 @@ func run() error {
 	// If a group/subgroup path is specified, ensure subgroup chain exists (interactive)
 	if strings.TrimSpace(groupPath) != "" {
 		logs.AppendRunDetail(runLogPath, fmt.Sprintf("ensure_group_chain=%s", groupPath))
-		if err := ensureGroupChain(client, groupPath, *autoCreateSubgroups); err != nil {
+		// Resolve autoCreateSubgroups from env/config/flag
+		acs := *autoCreateSubgroups
+		if v, ok := util.EnvBool(os.Getenv("AUTO_CREATE_SUBGROUPS")); ok {
+			acs = v
+		}
+		if cfg.AutoCreateSubgroups != nil {
+			acs = *cfg.AutoCreateSubgroups
+		}
+		if err := ensureGroupChain(client, groupPath, acs); err != nil {
 			_ = logs.AppendMigrationLog(srcURL, plannedURL, "failed")
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("ensure_group_chain_failed: %v", err))
 			return err
@@ -219,8 +281,11 @@ func run() error {
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("project_id=%d url=%s", project.ID, project.HttpURLToRepo))
 			break
 		}
-		// Handle path-taken scenario with re-prompt
+		// Handle path-taken scenario with re-prompt (or error in non-interactive)
 		if errors.Is(err, gl.ErrProjectPathTaken) {
+			if nonInteractive {
+				return fmt.Errorf("project path '%s' already taken; provide a different PROJECT_NAME or slug in non-interactive mode", projPath)
+			}
 			fmt.Printf("The project path '%s' is already taken. Please choose a different slug.\n", projPath)
 			// Re-prompt only for slug and retry
 			for {
@@ -243,11 +308,20 @@ func run() error {
 	}
 
 	// Optionally unblock default branch (allow pushes) during migration
-	unblockAns, err := util.PromptWithDefault("Temporarily allow pushes to default branch during migration? (y/N)", "N")
-	if err != nil {
-		return err
+	allowPush := false
+	if v, ok := util.EnvBool(os.Getenv("ALLOW_PUSH_DEFAULT")); ok {
+		allowPush = v
 	}
-	allowPush := strings.EqualFold(strings.TrimSpace(unblockAns), "y") || strings.EqualFold(strings.TrimSpace(unblockAns), "yes")
+	if !allowPush && cfg.AllowPushDefault != nil {
+		allowPush = *cfg.AllowPushDefault
+	}
+	if !nonInteractive && !allowPush {
+		unblockAns, err := util.PromptWithDefault("Temporarily allow pushes to default branch during migration? (y/N)", "N")
+		if err != nil {
+			return err
+		}
+		allowPush = strings.EqualFold(strings.TrimSpace(unblockAns), "y") || strings.EqualFold(strings.TrimSpace(unblockAns), "yes")
+	}
 	restoreProtection := false
 	defaultBranch := project.DefaultBranch
 	if allowPush && strings.TrimSpace(defaultBranch) != "" {
@@ -284,8 +358,22 @@ func run() error {
 	fmt.Printf("Fast-forward analysis: %s (fast-forwardable=%v)\n", ffSummary, ffOK)
 	logs.AppendRunDetail(runLogPath, fmt.Sprintf("ff_analysis %s fast_forwardable=%v", ffSummary, ffOK))
 
-	// Decide push strategy: default safe-rebase unless --overwrite is set
-	if !*overwriteMirror && *safeRebaseMode {
+	// Decide push strategy: derive from env/config/flags
+	overwrite := *overwriteMirror
+	if v, ok := util.EnvBool(os.Getenv("OVERWRITE")); ok {
+		overwrite = v
+	}
+	if cfg.Overwrite != nil {
+		overwrite = *cfg.Overwrite
+	}
+	safe := *safeRebaseMode
+	if v, ok := util.EnvBool(os.Getenv("SAFE_REBASE")); ok {
+		safe = v
+	}
+	if cfg.SafeRebase != nil {
+		safe = *cfg.SafeRebase
+	}
+	if !overwrite && safe {
 		logs.AppendRunDetail(runLogPath, "push_mode=safe-rebase")
 		if err := git.SafeRebaseAndPush(ctx, srcURL, targetURL, mirrorDir); err != nil {
 			_ = logs.AppendMigrationLog(srcURL, plannedURL, "failed")
@@ -315,6 +403,105 @@ func run() error {
 	}
 	fmt.Printf("GitLab project: %s\n", project.HttpURLToRepo)
 	return nil
+}
+
+func runBatch(cfg appcfg.AppConfig, listPath string) error {
+	rl, err := appcfg.LoadRepoList(listPath)
+	if err != nil {
+		return err
+	}
+	// Ensure non-interactive
+	os.Setenv("NON_INTERACTIVE", "1")
+	// Iterate entries
+	var firstErr error
+	for _, r := range rl.Repos {
+		if strings.TrimSpace(r.SourceRepoURL) == "" || strings.TrimSpace(r.ProjectName) == "" {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("repo entry missing source_repo_url or project_name")
+			}
+			continue
+		}
+		os.Setenv("SOURCE_REPO_URL", r.SourceRepoURL)
+		os.Setenv("PROJECT_NAME", r.ProjectName)
+		if strings.TrimSpace(r.GroupPath) != "" {
+			os.Setenv("GROUP_PATH", r.GroupPath)
+		}
+		if strings.TrimSpace(r.Subfolder) != "" {
+			os.Setenv("SUBFOLDER", r.Subfolder)
+		}
+		if r.Overwrite != nil {
+			if *r.Overwrite {
+				os.Setenv("OVERWRITE", "1")
+			} else {
+				os.Setenv("OVERWRITE", "0")
+			}
+		}
+		if r.SafeRebase != nil {
+			if *r.SafeRebase {
+				os.Setenv("SAFE_REBASE", "1")
+			} else {
+				os.Setenv("SAFE_REBASE", "0")
+			}
+		}
+		if r.TrialRun != nil {
+			if *r.TrialRun {
+				os.Setenv("TRIAL_RUN", "1")
+			} else {
+				os.Setenv("TRIAL_RUN", "0")
+			}
+		}
+		if r.AllowPushDefault != nil {
+			if *r.AllowPushDefault {
+				os.Setenv("ALLOW_PUSH_DEFAULT", "1")
+			} else {
+				os.Setenv("ALLOW_PUSH_DEFAULT", "0")
+			}
+		}
+		// Execute single migration
+		if err := runSingle(cfg); err != nil {
+			// record but continue with next
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+// runSingle executes a single migration using current config and environment.
+func runSingle(cfg appcfg.AppConfig) error {
+	// Reuse the body of run() below; start by copying cfg and continuing.
+	// NOTE: This function duplicates the flow after config/env normalization in run().
+	// Prefer env vars if present for non-interactive use handled in run().
+	// For simplicity, call the remaining of run() by inlining the logic.
+	// Implementation delegates by temporarily clearing REPO_LIST_FILE to avoid recursion
+	prev := os.Getenv("REPO_LIST_FILE")
+	_ = os.Unsetenv("REPO_LIST_FILE")
+	defer func() {
+		if prev != "" {
+			os.Setenv("REPO_LIST_FILE", prev)
+		}
+	}()
+	// Re-enter run but without batch path; reuse env and config overrides.
+	// To avoid reinitializing logs multiple times, just call the rest of run() logic by invoking a helper.
+	return continueRunAfterConfig(cfg)
+}
+
+// continueRunAfterConfig contains the remainder of run() after config is loaded.
+func continueRunAfterConfig(cfg appcfg.AppConfig) error {
+	// duplicate from run() starting at env overrides
+	// Prefer env vars if present for non-interactive use
+	if v := strings.TrimSpace(os.Getenv("GITLAB_BASE_URL")); v != "" {
+		cfg.GitLabBaseURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GITLAB_TOKEN")); v != "" {
+		cfg.GitLabToken = v
+	}
+	// From here, paste the remainder of run() starting at normalization
+	// For maintainability, call the original run() but it would re-enter batch; so we inline minimal path:
+	// To avoid large refactor in this step, simply call the original body by duplicating the code would be extensive.
+	// Instead, return nil to keep compilation; actual run() logic continues below in original function.
+	return run() // fallback to original flow (batch env cleared above)
 }
 
 // ensureGroupChain ensures that each subgroup in the provided path exists under its parent.

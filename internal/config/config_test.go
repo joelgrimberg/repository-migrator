@@ -56,14 +56,30 @@ func TestLoad_CorruptJSON_ReturnsParseError(t *testing.T) {
 
 func TestSave_ThenLoad_RoundTrip(t *testing.T) {
 	withTempHome(t)
-	in := AppConfig{GitLabBaseURL: "https://gitlab.example.com", GitLabToken: "token123", DefaultGroupPath: "org/sub"}
+	trueVal := true
+	falseVal := false
+	in := AppConfig{
+		GitLabBaseURL:       "https://gitlab.example.com",
+		GitLabToken:         "token123",
+		DefaultGroupPath:    "org/sub",
+		DefaultSubfolder:    "apps",
+		NonInteractive:      true,
+		AutoCreateSubgroups: &trueVal,
+		Overwrite:           &falseVal,
+		SafeRebase:          &trueVal,
+		TrialRun:            &falseVal,
+		AllowPushDefault:    &falseVal,
+	}
 	if err := Save(in); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	out, err := Load()
 	if err != nil { t.Fatalf("Load: %v", err) }
-	if out != in {
-		t.Fatalf("roundtrip mismatch: in=%#v out=%#v", in, out)
+	if out.GitLabBaseURL != in.GitLabBaseURL || out.GitLabToken != in.GitLabToken || out.DefaultGroupPath != in.DefaultGroupPath || out.DefaultSubfolder != in.DefaultSubfolder || out.NonInteractive != in.NonInteractive {
+		t.Fatalf("scalar fields mismatch: in=%#v out=%#v", in, out)
+	}
+	if out.AutoCreateSubgroups == nil || out.Overwrite == nil || out.SafeRebase == nil || out.TrialRun == nil || out.AllowPushDefault == nil {
+		t.Fatalf("pointer bools should be present after roundtrip: %#v", out)
 	}
 }
 
@@ -131,13 +147,15 @@ func TestLoad_IgnoresUnknownFields(t *testing.T) {
 		"gitlab_base_url": "https://gitlab.example.com",
 		"gitlab_token": "abc",
 		"default_group_path": "org",
+		"default_subfolder": "apps",
+		"non_interactive": true,
 		"extra": "ignored",
 	}
 	b, _ := json.Marshal(payload)
 	if err := os.WriteFile(p, b, 0o600); err != nil { t.Fatalf("write: %v", err) }
 	cfg, err := Load()
 	if err != nil { t.Fatalf("Load: %v", err) }
-	if cfg.GitLabBaseURL != "https://gitlab.example.com" || cfg.GitLabToken != "abc" || cfg.DefaultGroupPath != "org" {
+	if cfg.GitLabBaseURL != "https://gitlab.example.com" || cfg.GitLabToken != "abc" || cfg.DefaultGroupPath != "org" || cfg.DefaultSubfolder != "apps" || !cfg.NonInteractive {
 		t.Fatalf("unexpected values: %#v", cfg)
 	}
 }
