@@ -54,6 +54,9 @@ func run() error {
 	if targetDefaultBranch == "" {
 		targetDefaultBranch = strings.TrimSpace(cfg.TargetDefaultBranch)
 	}
+	if targetDefaultBranch == "" {
+		targetDefaultBranch = "master"
+	}
 
 	// Non-interactive mode (env or config)
 	nonInteractive, _ := util.EnvBool(os.Getenv("NON_INTERACTIVE"))

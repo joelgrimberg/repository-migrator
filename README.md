@@ -183,7 +183,7 @@ Set options via `repository-migrator.config.json` in the current working directo
 - `source_base_url` (string, optional): Base URL for source repositories (e.g., `ssh://user@host:1234/`)
 - `default_group_path` (string, optional): Default group/subgroup path
 - `default_subfolder` (string, optional): Subfolder appended under the group path
-- `target_default_branch` (string, optional): Set the target project's default branch after migration
+- `target_default_branch` (string, optional): Set the target project's default branch after migration (defaults to `master` if omitted)
 - `non_interactive` (bool, optional): Force non-interactive mode
 - `auto_create_subgroups` (bool, optional): Auto-create missing subgroups
 - `overwrite` (bool, optional): Mirror mode (destructive)
@@ -231,7 +231,7 @@ Notes:
 You will be prompted for:
 
 - GitLab base URL (once; remembered)
-  - GitLab Personal Access Token (prompted but not stored; use `GITLAB_TOKEN` env for CI)
+- GitLab Personal Access Token (prompted but not stored; use `GITLAB_TOKEN` env for CI)
 - Source Git repository URL (SSH or HTTPS)
 - Namespace (group/subgroup) and optional subfolder (remembered as default)
 - Trial run? (prints plan only)
