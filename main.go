@@ -477,6 +477,10 @@ func run() error {
 			fmt.Printf("Default branch set to %s\n", targetDefaultBranch)
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("set_default_branch=%s", targetDefaultBranch))
 		}
+		if err := ensureProtectedBranch(client, project.ID, targetDefaultBranch); err != nil {
+			fmt.Printf("Warning: failed to enforce protected branch %s: %v\n", targetDefaultBranch, err)
+			logs.AppendRunDetail(runLogPath, fmt.Sprintf("protected_branch_sync_failed branch=%s err=%v", targetDefaultBranch, err))
+		}
 	}
 	return nil
 }
@@ -630,6 +634,37 @@ func runSingle() error {
 		}
 	}()
 	return run()
+}
+
+func ensureProtectedBranch(client *gl.Client, projectID int, branch string) error {
+	protected, err := client.ListProtectedBranches(projectID)
+	if err != nil {
+		return err
+	}
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		return nil
+	}
+	targetProtected := false
+	for _, pb := range protected {
+		if pb.Name == branch {
+			targetProtected = true
+			continue
+		}
+		if err := client.UnprotectBranch(projectID, pb.Name); err != nil {
+			return fmt.Errorf("unprotect branch %s: %w", pb.Name, err)
+		}
+		fmt.Printf("Unprotected branch %s\n", pb.Name)
+	}
+	if !targetProtected {
+		if err := client.ProtectBranch(projectID, branch, 40, 40); err != nil {
+			return fmt.Errorf("protect branch %s: %w", branch, err)
+		}
+		fmt.Printf("Protected branch %s\n", branch)
+	} else {
+		fmt.Printf("Branch %s already protected\n", branch)
+	}
+	return nil
 }
 
 // ensureGroupChain ensures that each subgroup in the provided path exists under its parent.
