@@ -11,6 +11,7 @@ import (
 
 type AppConfig struct {
 	GitLabBaseURL       string `json:"gitlab_base_url"`
+	SourceBaseURL       string `json:"source_base_url,omitempty"`
 	DefaultGroupPath    string `json:"default_group_path,omitempty"`
 	DefaultSubfolder    string `json:"default_subfolder,omitempty"`
 	NonInteractive      bool   `json:"non_interactive,omitempty"`
@@ -110,4 +111,10 @@ func Save(cfg AppConfig) error {
 		return fmt.Errorf("persist config: %w", err)
 	}
 	return nil
+}
+
+// ResolveConfigPath returns the path that Load/Save use for the configuration file.
+// It can be used by other packages (e.g. logs) to co-locate artifacts with the config.
+func ResolveConfigPath() (string, error) {
+	return configPath()
 }

@@ -7,14 +7,15 @@ import (
 )
 
 type RepoEntry struct {
-	SourceRepoURL       string `json:"source_repo_url"`
-	ProjectName         string `json:"project_name"`
-	GroupPath           string `json:"group_path,omitempty"`
-	Subfolder           string `json:"subfolder,omitempty"`
-	Overwrite           *bool  `json:"overwrite,omitempty"`
-	SafeRebase          *bool  `json:"safe_rebase,omitempty"`
-	TrialRun            *bool  `json:"trial_run,omitempty"`
-	AllowPushDefault    *bool  `json:"allow_push_default_branch,omitempty"`
+	SourceRepoURL    string `json:"source_repo_url,omitempty"`
+	SourceName       string `json:"source_name,omitempty"`
+	ProjectName      string `json:"project_name"`
+	GroupPath        string `json:"group_path,omitempty"`
+	Subfolder        string `json:"subfolder,omitempty"`
+	Overwrite        *bool  `json:"overwrite,omitempty"`
+	SafeRebase       *bool  `json:"safe_rebase,omitempty"`
+	TrialRun         *bool  `json:"trial_run,omitempty"`
+	AllowPushDefault *bool  `json:"allow_push_default_branch,omitempty"`
 }
 
 type RepoList struct {

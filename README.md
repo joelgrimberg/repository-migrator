@@ -110,6 +110,7 @@ Place these files in your repository root (next to `.gitlab-ci.yml`):
 ```json
 {
   "gitlab_base_url": "https://gitlab.example.com",
+  "source_base_url": "ssh://some_user@somedomain:123456/",
   "default_group_path": "acme/migrations",
   "default_subfolder": "legacy",
   "non_interactive": true,
@@ -127,7 +128,6 @@ Place these files in your repository root (next to `.gitlab-ci.yml`):
 {
   "repos": [
     {
-      "source_repo_url": "https://github.com/acme/legacy-app.git",
       "project_name": "legacy-app",
       "group_path": "acme/migrations",
       "subfolder": "apps",
@@ -135,8 +135,8 @@ Place these files in your repository root (next to `.gitlab-ci.yml`):
       "trial_run": true
     },
     {
-      "source_repo_url": "git@github.com:acme/tools.git",
       "project_name": "tools",
+      "source_name": "tools.git",
       "group_path": "acme/internal",
       "overwrite": true,
       "allow_push_default_branch": true
@@ -144,6 +144,8 @@ Place these files in your repository root (next to `.gitlab-ci.yml`):
   ]
 }
 ```
+
+If `source_name` is omitted, the `project_name` is appended to `source_base_url` automatically.
 
 Run the CLI manually:
 
@@ -177,6 +179,7 @@ Set options via `repository-migrator.config.json` in the current working directo
 ### Config file keys (repository-migrator.config.json)
 
 - `gitlab_base_url` (string): GitLab base URL
+- `source_base_url` (string, optional): Base URL for source repositories (e.g., `ssh://user@host:1234/`)
 - `default_group_path` (string, optional): Default group/subgroup path
 - `default_subfolder` (string, optional): Subfolder appended under the group path
 - `non_interactive` (bool, optional): Force non-interactive mode
@@ -191,7 +194,7 @@ Set options via `repository-migrator.config.json` in the current working directo
 - `GITLAB_BASE_URL`
 - `GITLAB_TOKEN` (required for both interactive and non-interactive runs; never stored on disk)
 - `NON_INTERACTIVE` (1/true/yes)
-- `SOURCE_REPO_URL` (required in non-interactive mode when not using repo list)
+- `SOURCE_REPO_URL` (optional; derived automatically when `source_base_url` and repo `source_name` are set)
 - `PROJECT_NAME` (required if it cannot be inferred from `SOURCE_REPO_URL`)
 - `GROUP_PATH` (optional; falls back to config `default_group_path`)
 - `SUBFOLDER` (optional; falls back to config `default_subfolder`)
@@ -225,7 +228,7 @@ Notes:
 You will be prompted for:
 
 - GitLab base URL (once; remembered)
-- GitLab Personal Access Token (prompted but not stored; use `GITLAB_TOKEN` env for CI)
+  - GitLab Personal Access Token (prompted but not stored; use `GITLAB_TOKEN` env for CI)
 - Source Git repository URL (SSH or HTTPS)
 - Namespace (group/subgroup) and optional subfolder (remembered as default)
 - Trial run? (prints plan only)

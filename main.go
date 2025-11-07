@@ -45,7 +45,7 @@ func run() error {
 
 	// Batch mode: REPO_LIST_FILE points to JSON file with repos
 	if listPath := strings.TrimSpace(os.Getenv("REPO_LIST_FILE")); listPath != "" {
-		return runBatch(listPath)
+		return runBatch(cfg, listPath)
 	}
 
 	// Prefer env vars if present for non-interactive use
@@ -442,7 +442,7 @@ func run() error {
 	return nil
 }
 
-func runBatch(listPath string) error {
+func runBatch(cfg appcfg.AppConfig, listPath string) error {
 	rl, err := appcfg.LoadRepoList(listPath)
 	if err != nil {
 		return err
@@ -461,13 +461,13 @@ func runBatch(listPath string) error {
 	// Iterate entries
 	var firstErr error
 	for i, r := range rl.Repos {
-		repoID := r.SourceRepoURL
+		repoID := r.ProjectName
 		if repoID == "" {
 			repoID = fmt.Sprintf("entry-%d", i+1)
 		}
 
-		if strings.TrimSpace(r.SourceRepoURL) == "" || strings.TrimSpace(r.ProjectName) == "" {
-			err := fmt.Errorf("repo entry missing source_repo_url or project_name")
+		if strings.TrimSpace(r.ProjectName) == "" {
+			err := fmt.Errorf("repo entry missing project_name")
 			results = append(results, result{repo: repoID, success: false, err: err})
 			if firstErr == nil {
 				firstErr = err
@@ -475,9 +475,29 @@ func runBatch(listPath string) error {
 			continue
 		}
 
-		fmt.Printf("\n[%d/%d] Processing: %s -> %s\n", i+1, len(rl.Repos), r.SourceRepoURL, r.ProjectName)
+		// Derive source repo URL
+		sourceURL := strings.TrimSpace(r.SourceRepoURL)
+		if sourceURL == "" && strings.TrimSpace(cfg.SourceBaseURL) != "" {
+			sourceName := strings.TrimSpace(r.SourceName)
+			if sourceName == "" {
+				sourceName = r.ProjectName
+			}
+			base := strings.TrimRight(cfg.SourceBaseURL, "/")
+			sourceURL = base + "/" + strings.TrimLeft(sourceName, "/")
+		}
 
-		os.Setenv("SOURCE_REPO_URL", r.SourceRepoURL)
+		if strings.TrimSpace(sourceURL) == "" {
+			err := fmt.Errorf("repo entry missing source_repo_url and config.source_base_url not set")
+			results = append(results, result{repo: repoID, success: false, err: err})
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+
+		fmt.Printf("\n[%d/%d] Processing: %s -> %s\n", i+1, len(rl.Repos), sourceURL, r.ProjectName)
+
+		os.Setenv("SOURCE_REPO_URL", sourceURL)
 		os.Setenv("PROJECT_NAME", r.ProjectName)
 		if strings.TrimSpace(r.GroupPath) != "" {
 			os.Setenv("GROUP_PATH", r.GroupPath)

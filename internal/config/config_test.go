@@ -63,6 +63,7 @@ func TestSave_ThenLoad_RoundTrip(t *testing.T) {
 	falseVal := false
 	in := AppConfig{
 		GitLabBaseURL:       "https://gitlab.example.com",
+		SourceBaseURL:       "ssh://git@example.com:/",
 		DefaultGroupPath:    "org/sub",
 		DefaultSubfolder:    "apps",
 		NonInteractive:      true,
@@ -79,7 +80,7 @@ func TestSave_ThenLoad_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if out.GitLabBaseURL != in.GitLabBaseURL || out.DefaultGroupPath != in.DefaultGroupPath || out.DefaultSubfolder != in.DefaultSubfolder || out.NonInteractive != in.NonInteractive {
+	if out.GitLabBaseURL != in.GitLabBaseURL || out.SourceBaseURL != in.SourceBaseURL || out.DefaultGroupPath != in.DefaultGroupPath || out.DefaultSubfolder != in.DefaultSubfolder || out.NonInteractive != in.NonInteractive {
 		t.Fatalf("scalar fields mismatch: in=%#v out=%#v", in, out)
 	}
 	if out.AutoCreateSubgroups == nil || out.Overwrite == nil || out.SafeRebase == nil || out.TrialRun == nil || out.AllowPushDefault == nil {

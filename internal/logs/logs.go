@@ -4,11 +4,19 @@ import (
     "fmt"
     "os"
     "path/filepath"
-    "time"
     "strings"
+    "time"
+
+    appcfg "repository-migrator/internal/config"
 )
 
 func configDir() (string, error) {
+    if cfgPath, err := appcfg.ResolveConfigPath(); err == nil && strings.TrimSpace(cfgPath) != "" {
+        dir := filepath.Dir(cfgPath)
+        if strings.TrimSpace(dir) != "" {
+            return dir, nil
+        }
+    }
     home, err := os.UserHomeDir()
     if err != nil {
         return "", err
