@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 var autoCreateSubgroups = flag.Bool("auto-create-subgroups", true, "automatically create missing GitLab subgroups without prompting")
 var safeRebaseMode = flag.Bool("safe-rebase", true, "attempt rebase and fast-forward only; stop on conflicts and never overwrite (default)")
 var overwriteMirror = flag.Bool("overwrite", false, "overwrite target by mirroring (git push --mirror --prune)")
+var configPrinted bool
 
 func main() {
 	flag.Parse()
@@ -41,11 +43,6 @@ func run() error {
 	cfg, err := appcfg.Load()
 	if err != nil {
 		return err
-	}
-
-	// Batch mode: REPO_LIST_FILE points to JSON file with repos
-	if listPath := strings.TrimSpace(os.Getenv("REPO_LIST_FILE")); listPath != "" {
-		return runBatch(cfg, listPath)
 	}
 
 	// Prefer env vars if present for non-interactive use
@@ -99,15 +96,23 @@ func run() error {
 		token = strings.TrimSpace(val)
 	}
 	// Show configured settings (excluding token)
-	fmt.Println("Configured settings:")
-	fmt.Printf("- GitLab base URL: %s\n", cfg.GitLabBaseURL)
-	if strings.TrimSpace(cfg.DefaultGroupPath) != "" {
-		fmt.Printf("- Default group path: %s\n", cfg.DefaultGroupPath)
+	if !configPrinted {
+		fmt.Println("Configured settings:")
+		fmt.Printf("- GitLab base URL: %s\n", cfg.GitLabBaseURL)
+		if strings.TrimSpace(cfg.DefaultGroupPath) != "" {
+			fmt.Printf("- Default group path: %s\n", cfg.DefaultGroupPath)
+		}
+		configPrinted = true
 	}
 	logs.AppendRunDetail(runLogPath, fmt.Sprintf("config base_url=%s default_group=%s", cfg.GitLabBaseURL, cfg.DefaultGroupPath))
 	// Persist for next time
 	if err := appcfg.Save(cfg); err != nil {
 		return err
+	}
+
+	// Batch mode: REPO_LIST_FILE points to JSON file with repos
+	if listPath := strings.TrimSpace(os.Getenv("REPO_LIST_FILE")); listPath != "" {
+		return runBatch(cfg, listPath)
 	}
 
 	// Source repository URL (env SOURCE_REPO_URL or prompt)
@@ -238,16 +243,28 @@ func run() error {
 	base := strings.TrimRight(cfg.GitLabBaseURL, "/")
 	plannedURL := fmt.Sprintf("%s/%s/%s.git", base, strings.Trim(namespace, "/"), strings.Trim(projPath, "/"))
 
+	targetDisplay := strings.TrimSuffix(plannedURL, ".git")
+	sourceDisplay := strings.TrimSuffix(srcURL, ".git")
+	if idxStr := strings.TrimSpace(os.Getenv("BATCH_INDEX")); idxStr != "" {
+		totalStr := strings.TrimSpace(os.Getenv("BATCH_TOTAL"))
+		if totalStr == "" {
+			totalStr = "?"
+		}
+		fmt.Printf("[%s/%s] %s -> %s\n", idxStr, totalStr, sourceDisplay, targetDisplay)
+	} else {
+		fmt.Printf("%s -> %s\n", sourceDisplay, targetDisplay)
+	}
+
 	if isTrial {
 		fmt.Println("=== TRIAL RUN - No changes will be made ===")
-		fmt.Printf("Source repository: %s\n", srcURL)
+		fmt.Printf("Source repository: %s\n", sourceDisplay)
 		fmt.Printf("Project name: %s\n", projectName)
 		fmt.Printf("Project path (slug): %s\n", projPath)
 		fmt.Printf("Target namespace: %s\n", namespace)
 		if strings.TrimSpace(groupPath) != "" {
 			fmt.Printf("Group path: %s\n", groupPath)
 		}
-		fmt.Printf("Target repository (planned): %s\n", plannedURL)
+		fmt.Printf("Target repository (planned): %s\n", targetDisplay)
 		// Show mode settings
 		overwrite := *overwriteMirror
 		if v, ok := util.EnvBool(os.Getenv("OVERWRITE")); ok {
@@ -450,6 +467,10 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 	// Ensure non-interactive
 	os.Setenv("NON_INTERACTIVE", "1")
 
+	total := len(rl.Repos)
+	os.Setenv("BATCH_TOTAL", strconv.Itoa(total))
+	defer os.Unsetenv("BATCH_TOTAL")
+
 	// Track results for summary
 	type result struct {
 		repo    string
@@ -495,10 +516,11 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 			continue
 		}
 
-		fmt.Printf("\n[%d/%d] Processing: %s -> %s\n", i+1, len(rl.Repos), sourceURL, r.ProjectName)
+		fmt.Printf("\n[%d/%d] Processing repository '%s'\n", i+1, total, r.ProjectName)
 
 		os.Setenv("SOURCE_REPO_URL", sourceURL)
 		os.Setenv("PROJECT_NAME", r.ProjectName)
+		os.Setenv("BATCH_INDEX", strconv.Itoa(i+1))
 		if strings.TrimSpace(r.GroupPath) != "" {
 			os.Setenv("GROUP_PATH", r.GroupPath)
 		} else {
@@ -555,6 +577,7 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 		} else {
 			results = append(results, result{repo: repoID, success: true})
 		}
+		os.Unsetenv("BATCH_INDEX")
 	}
 
 	// Print summary
