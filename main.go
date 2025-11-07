@@ -238,9 +238,45 @@ func run() error {
 	plannedURL := fmt.Sprintf("%s/%s/%s.git", base, strings.Trim(namespace, "/"), strings.Trim(projPath, "/"))
 
 	if isTrial {
-		fmt.Println("Trial run - no changes will be made.")
-		fmt.Printf("- Source repo: %s\n", srcURL)
-		fmt.Printf("- Target repo (planned): %s\n", plannedURL)
+		fmt.Println("=== TRIAL RUN - No changes will be made ===")
+		fmt.Printf("Source repository: %s\n", srcURL)
+		fmt.Printf("Project name: %s\n", projectName)
+		fmt.Printf("Project path (slug): %s\n", projPath)
+		fmt.Printf("Target namespace: %s\n", namespace)
+		if strings.TrimSpace(groupPath) != "" {
+			fmt.Printf("Group path: %s\n", groupPath)
+		}
+		fmt.Printf("Target repository (planned): %s\n", plannedURL)
+		// Show mode settings
+		overwrite := *overwriteMirror
+		if v, ok := util.EnvBool(os.Getenv("OVERWRITE")); ok {
+			overwrite = v
+		}
+		if cfg.Overwrite != nil {
+			overwrite = *cfg.Overwrite
+		}
+		safe := *safeRebaseMode
+		if v, ok := util.EnvBool(os.Getenv("SAFE_REBASE")); ok {
+			safe = v
+		}
+		if cfg.SafeRebase != nil {
+			safe = *cfg.SafeRebase
+		}
+		if overwrite {
+			fmt.Println("Mode: overwrite (mirror - destructive)")
+		} else if safe {
+			fmt.Println("Mode: safe-rebase (fast-forward only)")
+		}
+		// Show auto-create subgroups setting
+		acs := *autoCreateSubgroups
+		if v, ok := util.EnvBool(os.Getenv("AUTO_CREATE_SUBGROUPS")); ok {
+			acs = v
+		}
+		if cfg.AutoCreateSubgroups != nil {
+			acs = *cfg.AutoCreateSubgroups
+		}
+		fmt.Printf("Auto-create subgroups: %v\n", acs)
+		fmt.Println("===========================================")
 		_ = logs.AppendMigrationLog(srcURL, plannedURL, "trial")
 		logs.AppendRunDetail(runLogPath, "trial-run=true")
 		return nil
@@ -412,22 +448,45 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 	}
 	// Ensure non-interactive
 	os.Setenv("NON_INTERACTIVE", "1")
+
+	// Track results for summary
+	type result struct {
+		repo    string
+		success bool
+		err     error
+	}
+	results := make([]result, 0, len(rl.Repos))
+
 	// Iterate entries
 	var firstErr error
-	for _, r := range rl.Repos {
+	for i, r := range rl.Repos {
+		repoID := r.SourceRepoURL
+		if repoID == "" {
+			repoID = fmt.Sprintf("entry-%d", i+1)
+		}
+
 		if strings.TrimSpace(r.SourceRepoURL) == "" || strings.TrimSpace(r.ProjectName) == "" {
+			err := fmt.Errorf("repo entry missing source_repo_url or project_name")
+			results = append(results, result{repo: repoID, success: false, err: err})
 			if firstErr == nil {
-				firstErr = fmt.Errorf("repo entry missing source_repo_url or project_name")
+				firstErr = err
 			}
 			continue
 		}
+
+		fmt.Printf("\n[%d/%d] Processing: %s -> %s\n", i+1, len(rl.Repos), r.SourceRepoURL, r.ProjectName)
+
 		os.Setenv("SOURCE_REPO_URL", r.SourceRepoURL)
 		os.Setenv("PROJECT_NAME", r.ProjectName)
 		if strings.TrimSpace(r.GroupPath) != "" {
 			os.Setenv("GROUP_PATH", r.GroupPath)
+		} else {
+			os.Unsetenv("GROUP_PATH")
 		}
 		if strings.TrimSpace(r.Subfolder) != "" {
 			os.Setenv("SUBFOLDER", r.Subfolder)
+		} else {
+			os.Unsetenv("SUBFOLDER")
 		}
 		if r.Overwrite != nil {
 			if *r.Overwrite {
@@ -435,6 +494,8 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 			} else {
 				os.Setenv("OVERWRITE", "0")
 			}
+		} else {
+			os.Unsetenv("OVERWRITE")
 		}
 		if r.SafeRebase != nil {
 			if *r.SafeRebase {
@@ -442,6 +503,8 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 			} else {
 				os.Setenv("SAFE_REBASE", "0")
 			}
+		} else {
+			os.Unsetenv("SAFE_REBASE")
 		}
 		if r.TrialRun != nil {
 			if *r.TrialRun {
@@ -449,6 +512,8 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 			} else {
 				os.Setenv("TRIAL_RUN", "0")
 			}
+		} else {
+			os.Unsetenv("TRIAL_RUN")
 		}
 		if r.AllowPushDefault != nil {
 			if *r.AllowPushDefault {
@@ -456,15 +521,36 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 			} else {
 				os.Setenv("ALLOW_PUSH_DEFAULT", "0")
 			}
+		} else {
+			os.Unsetenv("ALLOW_PUSH_DEFAULT")
 		}
+
 		// Execute single migration
 		if err := runSingle(cfg); err != nil {
-			// record but continue with next
+			results = append(results, result{repo: repoID, success: false, err: err})
 			if firstErr == nil {
 				firstErr = err
 			}
+		} else {
+			results = append(results, result{repo: repoID, success: true})
 		}
 	}
+
+	// Print summary
+	fmt.Println("\n=== Batch Migration Summary ===")
+	for _, res := range results {
+		if res.success {
+			fmt.Printf("✅ %s\n", res.repo)
+		} else {
+			fmt.Printf("🔻 %s", res.repo)
+			if res.err != nil {
+				fmt.Printf(" - %v", res.err)
+			}
+			fmt.Println()
+		}
+	}
+	fmt.Println("================================")
+
 	return firstErr
 }
 
