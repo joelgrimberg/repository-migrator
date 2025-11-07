@@ -50,6 +50,10 @@ func run() error {
 		cfg.GitLabBaseURL = v
 	}
 	token := strings.TrimSpace(os.Getenv("GITLAB_TOKEN"))
+	targetDefaultBranch := strings.TrimSpace(os.Getenv("TARGET_DEFAULT_BRANCH"))
+	if targetDefaultBranch == "" {
+		targetDefaultBranch = strings.TrimSpace(cfg.TargetDefaultBranch)
+	}
 
 	// Non-interactive mode (env or config)
 	nonInteractive, _ := util.EnvBool(os.Getenv("NON_INTERACTIVE"))
@@ -461,6 +465,14 @@ func run() error {
 	logs.AppendRunDetail(runLogPath, "result=passed")
 	if restoreProtection && strings.TrimSpace(defaultBranch) != "" {
 		_ = client.ProtectBranch(project.ID, defaultBranch, 40, 40)
+	}
+	if targetDefaultBranch != "" {
+		if err := client.SetDefaultBranch(project.ID, targetDefaultBranch); err != nil {
+			fmt.Printf("Warning: failed to set default branch to %s: %v\n", targetDefaultBranch, err)
+			logs.AppendRunDetail(runLogPath, fmt.Sprintf("set_default_branch_failed branch=%s err=%v", targetDefaultBranch, err))
+		} else {
+			logs.AppendRunDetail(runLogPath, fmt.Sprintf("set_default_branch=%s", targetDefaultBranch))
+		}
 	}
 	fmt.Printf("GitLab project: %s\n", project.HttpURLToRepo)
 	return nil

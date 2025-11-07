@@ -20,6 +20,7 @@ type AppConfig struct {
 	SafeRebase          *bool  `json:"safe_rebase,omitempty"`
 	TrialRun            *bool  `json:"trial_run,omitempty"`
 	AllowPushDefault    *bool  `json:"allow_push_default_branch,omitempty"`
+	TargetDefaultBranch string `json:"target_default_branch,omitempty"`
 }
 
 func configDir() (string, error) {

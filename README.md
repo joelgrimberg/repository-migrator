@@ -113,6 +113,7 @@ Place these files in your repository root (next to `.gitlab-ci.yml`):
   "source_base_url": "ssh://some_user@somedomain:123456/",
   "default_group_path": "acme/migrations",
   "default_subfolder": "legacy",
+  "target_default_branch": "master",
   "non_interactive": true,
   "auto_create_subgroups": true,
   "safe_rebase": true,
@@ -182,6 +183,7 @@ Set options via `repository-migrator.config.json` in the current working directo
 - `source_base_url` (string, optional): Base URL for source repositories (e.g., `ssh://user@host:1234/`)
 - `default_group_path` (string, optional): Default group/subgroup path
 - `default_subfolder` (string, optional): Subfolder appended under the group path
+- `target_default_branch` (string, optional): Set the target project's default branch after migration
 - `non_interactive` (bool, optional): Force non-interactive mode
 - `auto_create_subgroups` (bool, optional): Auto-create missing subgroups
 - `overwrite` (bool, optional): Mirror mode (destructive)
@@ -203,6 +205,7 @@ Set options via `repository-migrator.config.json` in the current working directo
 - `AUTO_CREATE_SUBGROUPS` (1/true/yes)
 - `OVERWRITE` (1/true/yes)
 - `SAFE_REBASE` (1/true/yes)
+- `TARGET_DEFAULT_BRANCH` (string)
 - `REPO_LIST_FILE` (set automatically when you invoke `repository-migrator <path>`)
 
 Precedence: environment variables override config; flags still apply unless overridden by env/config.

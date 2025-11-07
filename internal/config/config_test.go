@@ -72,6 +72,7 @@ func TestSave_ThenLoad_RoundTrip(t *testing.T) {
 		SafeRebase:          &trueVal,
 		TrialRun:            &falseVal,
 		AllowPushDefault:    &falseVal,
+		TargetDefaultBranch: "master",
 	}
 	if err := Save(in); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -80,7 +81,7 @@ func TestSave_ThenLoad_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if out.GitLabBaseURL != in.GitLabBaseURL || out.SourceBaseURL != in.SourceBaseURL || out.DefaultGroupPath != in.DefaultGroupPath || out.DefaultSubfolder != in.DefaultSubfolder || out.NonInteractive != in.NonInteractive {
+	if out.GitLabBaseURL != in.GitLabBaseURL || out.SourceBaseURL != in.SourceBaseURL || out.TargetDefaultBranch != in.TargetDefaultBranch || out.DefaultGroupPath != in.DefaultGroupPath || out.DefaultSubfolder != in.DefaultSubfolder || out.NonInteractive != in.NonInteractive {
 		t.Fatalf("scalar fields mismatch: in=%#v out=%#v", in, out)
 	}
 	if out.AutoCreateSubgroups == nil || out.Overwrite == nil || out.SafeRebase == nil || out.TrialRun == nil || out.AllowPushDefault == nil {

@@ -127,6 +127,21 @@ func (c *Client) CreateProjectInNamespace(name, path string, namespaceID int, na
 	return p, nil
 }
 
+// SetDefaultBranch updates the project's default branch.
+func (c *Client) SetDefaultBranch(projectID int, branch string) error {
+	body := map[string]any{
+		"default_branch": branch,
+	}
+	resp, err := c.http.R().SetBody(body).Put(fmt.Sprintf("/projects/%d", projectID))
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("set default branch failed: %s - %s", resp.Status(), string(resp.Body()))
+	}
+	return nil
+}
+
 // GetGroupByFullPath fetches a group (or subgroup) by its full path (e.g., "org" or "org/subgroup").
 func (c *Client) GetGroupByFullPath(fullPath string) (Group, error) {
 	var g Group
