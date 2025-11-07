@@ -471,10 +471,10 @@ func run() error {
 			fmt.Printf("Warning: failed to set default branch to %s: %v\n", targetDefaultBranch, err)
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("set_default_branch_failed branch=%s err=%v", targetDefaultBranch, err))
 		} else {
+			fmt.Printf("Default branch set to %s\n", targetDefaultBranch)
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("set_default_branch=%s", targetDefaultBranch))
 		}
 	}
-	fmt.Printf("GitLab project: %s\n", project.HttpURLToRepo)
 	return nil
 }
 
