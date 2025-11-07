@@ -151,6 +151,13 @@ func run() error {
 	}
 
 	// Ask where to create project (user or group)
+	checkCtx, cancelCheck := context.WithTimeout(context.Background(), 2*time.Minute)
+	if err := git.CheckRemote(checkCtx, srcURL); err != nil {
+		cancelCheck()
+		return fmt.Errorf("source repository %s not accessible: %w", srcURL, err)
+	}
+	cancelCheck()
+
 	client := gl.NewClient(cfg.GitLabBaseURL, token)
 	user, err := client.CurrentUser()
 	if err != nil {
