@@ -25,6 +25,10 @@ var overwriteMirror = flag.Bool("overwrite", false, "overwrite target by mirrori
 
 func main() {
 	flag.Parse()
+	if args := flag.Args(); len(args) > 0 {
+		// Treat first argument as repo list path for batch mode
+		_ = os.Setenv("REPO_LIST_FILE", args[0])
+	}
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -41,16 +45,14 @@ func run() error {
 
 	// Batch mode: REPO_LIST_FILE points to JSON file with repos
 	if listPath := strings.TrimSpace(os.Getenv("REPO_LIST_FILE")); listPath != "" {
-		return runBatch(cfg, listPath)
+		return runBatch(listPath)
 	}
 
 	// Prefer env vars if present for non-interactive use
 	if v := strings.TrimSpace(os.Getenv("GITLAB_BASE_URL")); v != "" {
 		cfg.GitLabBaseURL = v
 	}
-	if v := strings.TrimSpace(os.Getenv("GITLAB_TOKEN")); v != "" {
-		cfg.GitLabToken = v
-	}
+	token := strings.TrimSpace(os.Getenv("GITLAB_TOKEN"))
 
 	// Non-interactive mode (env or config)
 	nonInteractive, _ := util.EnvBool(os.Getenv("NON_INTERACTIVE"))
@@ -60,7 +62,6 @@ func run() error {
 
 	// Normalize loaded config
 	cfg.GitLabBaseURL = strings.TrimSpace(cfg.GitLabBaseURL)
-	cfg.GitLabToken = strings.TrimSpace(cfg.GitLabToken)
 
 	// If base URL present, validate and normalize; otherwise ask
 	if cfg.GitLabBaseURL != "" {
@@ -84,9 +85,9 @@ func run() error {
 		}
 		cfg.GitLabBaseURL = strings.TrimRight(val, "/")
 	}
-	if cfg.GitLabToken == "" {
+	if token == "" {
 		if nonInteractive {
-			return errors.New("missing GitLab token in non-interactive mode (set GITLAB_TOKEN or config.gitlab_token)")
+			return errors.New("missing GitLab token in non-interactive mode (set GITLAB_TOKEN)")
 		}
 		val, err := util.Prompt("Enter GitLab Personal Access Token (scope: api): ")
 		if err != nil {
@@ -95,7 +96,7 @@ func run() error {
 		if strings.TrimSpace(val) == "" {
 			return errors.New("token cannot be empty")
 		}
-		cfg.GitLabToken = strings.TrimSpace(val)
+		token = strings.TrimSpace(val)
 	}
 	// Show configured settings (excluding token)
 	fmt.Println("Configured settings:")
@@ -145,7 +146,7 @@ func run() error {
 	}
 
 	// Ask where to create project (user or group)
-	client := gl.NewClient(cfg.GitLabBaseURL, cfg.GitLabToken)
+	client := gl.NewClient(cfg.GitLabBaseURL, token)
 	user, err := client.CurrentUser()
 	if err != nil {
 		return fmt.Errorf("authenticate to GitLab: %w", err)
@@ -384,7 +385,7 @@ func run() error {
 	defer cancel()
 
 	// Build authenticated remote URL using token; prefer oauth2 username for tokens
-	targetURL, err := addTokenToHTTPURL(project.HttpURLToRepo, cfg.GitLabToken)
+	targetURL, err := addTokenToHTTPURL(project.HttpURLToRepo, token)
 	if err != nil {
 		return err
 	}
@@ -441,7 +442,7 @@ func run() error {
 	return nil
 }
 
-func runBatch(cfg appcfg.AppConfig, listPath string) error {
+func runBatch(listPath string) error {
 	rl, err := appcfg.LoadRepoList(listPath)
 	if err != nil {
 		return err
@@ -526,7 +527,7 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 		}
 
 		// Execute single migration
-		if err := runSingle(cfg); err != nil {
+		if err := runSingle(); err != nil {
 			results = append(results, result{repo: repoID, success: false, err: err})
 			if firstErr == nil {
 				firstErr = err
@@ -554,13 +555,8 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 	return firstErr
 }
 
-// runSingle executes a single migration using current config and environment.
-func runSingle(cfg appcfg.AppConfig) error {
-	// Reuse the body of run() below; start by copying cfg and continuing.
-	// NOTE: This function duplicates the flow after config/env normalization in run().
-	// Prefer env vars if present for non-interactive use handled in run().
-	// For simplicity, call the remaining of run() by inlining the logic.
-	// Implementation delegates by temporarily clearing REPO_LIST_FILE to avoid recursion
+// runSingle executes a single migration using current environment (batch helper).
+func runSingle() error {
 	prev := os.Getenv("REPO_LIST_FILE")
 	_ = os.Unsetenv("REPO_LIST_FILE")
 	defer func() {
@@ -568,26 +564,7 @@ func runSingle(cfg appcfg.AppConfig) error {
 			os.Setenv("REPO_LIST_FILE", prev)
 		}
 	}()
-	// Re-enter run but without batch path; reuse env and config overrides.
-	// To avoid reinitializing logs multiple times, just call the rest of run() logic by invoking a helper.
-	return continueRunAfterConfig(cfg)
-}
-
-// continueRunAfterConfig contains the remainder of run() after config is loaded.
-func continueRunAfterConfig(cfg appcfg.AppConfig) error {
-	// duplicate from run() starting at env overrides
-	// Prefer env vars if present for non-interactive use
-	if v := strings.TrimSpace(os.Getenv("GITLAB_BASE_URL")); v != "" {
-		cfg.GitLabBaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("GITLAB_TOKEN")); v != "" {
-		cfg.GitLabToken = v
-	}
-	// From here, paste the remainder of run() starting at normalization
-	// For maintainability, call the original run() but it would re-enter batch; so we inline minimal path:
-	// To avoid large refactor in this step, simply call the original body by duplicating the code would be extensive.
-	// Instead, return nil to keep compilation; actual run() logic continues below in original function.
-	return run() // fallback to original flow (batch env cleared above)
+	return run()
 }
 
 // ensureGroupChain ensures that each subgroup in the provided path exists under its parent.

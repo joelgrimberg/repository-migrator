@@ -10,17 +10,21 @@ import (
 	"testing"
 )
 
-// helper to point HOME to a temp dir so configDir/configPath stay isolated per test
-func withTempHome(t *testing.T) string {
+// helper to point HOME and config path to a temp dir so configDir/configPath stay isolated per test
+func withTempHome(t *testing.T) (string, string) {
 	t.Helper()
 	d := t.TempDir()
-	// GitHub runners sometimes use HOME, mac uses HOME; ensure consistent
 	t.Setenv("HOME", d)
-	// Also set USERPROFILE on Windows just in case (noop elsewhere)
 	if runtime.GOOS == "windows" {
 		t.Setenv("USERPROFILE", d)
 	}
-	return d
+	cfgDir := filepath.Join(d, "cfg")
+	cfgPath := filepath.Join(cfgDir, "config.json")
+	t.Setenv("REPO_MIGRATOR_CONFIG", cfgPath)
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatalf("mkdir cfgDir: %v", err)
+	}
+	return cfgDir, cfgPath
 }
 
 func readFile(t *testing.T, p string) string {
@@ -32,7 +36,7 @@ func readFile(t *testing.T, p string) string {
 }
 
 func TestLoad_NotFound_ReturnsZeroValueNoError(t *testing.T) {
-	withTempHome(t)
+	_, _ = withTempHome(t)
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
@@ -43,24 +47,22 @@ func TestLoad_NotFound_ReturnsZeroValueNoError(t *testing.T) {
 }
 
 func TestLoad_CorruptJSON_ReturnsParseError(t *testing.T) {
-	withTempHome(t)
-	p, err := configPath()
-	if err != nil { t.Fatalf("configPath: %v", err) }
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil { t.Fatalf("mkdir: %v", err) }
-	if err := os.WriteFile(p, []byte("{ not: json"), 0o600); err != nil { t.Fatalf("write: %v", err) }
-	_, err = Load()
+	_, cfgPath := withTempHome(t)
+	if err := os.WriteFile(cfgPath, []byte("{ not: json"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "parse config") {
 		t.Fatalf("expected parse error, got %v", err)
 	}
 }
 
 func TestSave_ThenLoad_RoundTrip(t *testing.T) {
-	withTempHome(t)
+	_, cfgPath := withTempHome(t)
 	trueVal := true
 	falseVal := false
 	in := AppConfig{
 		GitLabBaseURL:       "https://gitlab.example.com",
-		GitLabToken:         "token123",
 		DefaultGroupPath:    "org/sub",
 		DefaultSubfolder:    "apps",
 		NonInteractive:      true,
@@ -74,108 +76,116 @@ func TestSave_ThenLoad_RoundTrip(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 	out, err := Load()
-	if err != nil { t.Fatalf("Load: %v", err) }
-	if out.GitLabBaseURL != in.GitLabBaseURL || out.GitLabToken != in.GitLabToken || out.DefaultGroupPath != in.DefaultGroupPath || out.DefaultSubfolder != in.DefaultSubfolder || out.NonInteractive != in.NonInteractive {
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if out.GitLabBaseURL != in.GitLabBaseURL || out.DefaultGroupPath != in.DefaultGroupPath || out.DefaultSubfolder != in.DefaultSubfolder || out.NonInteractive != in.NonInteractive {
 		t.Fatalf("scalar fields mismatch: in=%#v out=%#v", in, out)
 	}
 	if out.AutoCreateSubgroups == nil || out.Overwrite == nil || out.SafeRebase == nil || out.TrialRun == nil || out.AllowPushDefault == nil {
 		t.Fatalf("pointer bools should be present after roundtrip: %#v", out)
 	}
+	if _, err := os.Stat(cfgPath); err != nil {
+		t.Fatalf("config file not written: %v", err)
+	}
 }
 
 func TestSave_CreatesDirAndFileModes(t *testing.T) {
-	withTempHome(t)
-	cfg := AppConfig{GitLabBaseURL: "https://x", GitLabToken: "y"}
-	if err := Save(cfg); err != nil { t.Fatalf("Save: %v", err) }
-	p, err := configPath()
-	if err != nil { t.Fatalf("configPath: %v", err) }
-	// directory perms
-	d := filepath.Dir(p)
-	st, err := os.Stat(d)
-	if err != nil { t.Fatalf("stat dir: %v", err) }
+	cfgDir, cfgPath := withTempHome(t)
+	if err := os.RemoveAll(cfgDir); err != nil {
+		t.Fatalf("remove cfgDir: %v", err)
+	}
+	cfg := AppConfig{GitLabBaseURL: "https://x"}
+	if err := Save(cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	st, err := os.Stat(cfgDir)
+	if err != nil {
+		t.Fatalf("stat dir: %v", err)
+	}
 	if st.Mode().Perm()&0o777 != 0o700 {
 		t.Fatalf("config dir perms = %o, want 0700", st.Mode().Perm()&0o777)
 	}
-	// file perms
-	fst, err := os.Stat(p)
-	if err != nil { t.Fatalf("stat file: %v", err) }
+	fst, err := os.Stat(cfgPath)
+	if err != nil {
+		t.Fatalf("stat file: %v", err)
+	}
 	if fst.Mode().Perm()&0o777 != 0o600 {
 		t.Fatalf("config file perms = %o, want 0600", fst.Mode().Perm()&0o777)
 	}
 }
 
 func TestLoad_UnreadableFile_PermissionDenied(t *testing.T) {
-	withTempHome(t)
-	p, err := configPath()
-	if err != nil { t.Fatalf("configPath: %v", err) }
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil { t.Fatalf("mkdir: %v", err) }
-	if err := os.WriteFile(p, []byte("{}"), 0o000); err != nil { t.Fatalf("write: %v", err) }
-	_, err = Load()
+	_, cfgPath := withTempHome(t)
+	if err := os.WriteFile(cfgPath, []byte("{}"), 0o000); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for unreadable file, got nil")
 	}
-	// os.ReadFile may wrap a path error; just assert it's from read path
 	if !strings.Contains(err.Error(), "read config") {
 		t.Fatalf("expected read config error, got %v", err)
 	}
 }
 
 func TestSave_MkdirAllFails_WhenConfigDirIsFile(t *testing.T) {
-	withTempHome(t)
-	dir, err := configDir()
-	if err != nil { t.Fatalf("configDir: %v", err) }
-	// create parent ~/.config, then create a file at ~/.config/repository-migrator to break MkdirAll
-	parent := filepath.Dir(dir)
-	if err := os.MkdirAll(parent, 0o700); err != nil { t.Fatalf("mkdir parent: %v", err) }
-	if err := os.WriteFile(dir, []byte("not a dir"), 0o600); err != nil { t.Fatalf("write file at dir path: %v", err) }
-	err = Save(AppConfig{GitLabBaseURL: "x"})
+	cfgDir, _ := withTempHome(t)
+	if err := os.RemoveAll(cfgDir); err != nil {
+		t.Fatalf("remove cfgDir: %v", err)
+	}
+	if err := os.WriteFile(cfgDir, []byte("not a dir"), 0o600); err != nil {
+		t.Fatalf("write file at dir path: %v", err)
+	}
+	err := Save(AppConfig{GitLabBaseURL: "x"})
 	if err == nil {
 		t.Fatal("expected Save to fail when configDir is a file")
 	}
-	// Ensure error mentions mkdir
 	if !strings.Contains(err.Error(), "mkdir config dir") && !strings.Contains(err.Error(), "not a directory") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	// clean up the file so later checks (if any) are unaffected
+	_ = os.Remove(cfgDir)
 }
 
 func TestLoad_IgnoresUnknownFields(t *testing.T) {
-	withTempHome(t)
-	p, err := configPath()
-	if err != nil { t.Fatalf("configPath: %v", err) }
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil { t.Fatalf("mkdir: %v", err) }
+	_, cfgPath := withTempHome(t)
 	payload := map[string]any{
-		"gitlab_base_url": "https://gitlab.example.com",
-		"gitlab_token": "abc",
+		"gitlab_base_url":    "https://gitlab.example.com",
 		"default_group_path": "org",
-		"default_subfolder": "apps",
-		"non_interactive": true,
-		"extra": "ignored",
+		"default_subfolder":  "apps",
+		"non_interactive":    true,
+		"extra":              "ignored",
 	}
 	b, _ := json.Marshal(payload)
-	if err := os.WriteFile(p, b, 0o600); err != nil { t.Fatalf("write: %v", err) }
+	if err := os.WriteFile(cfgPath, b, 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
 	cfg, err := Load()
-	if err != nil { t.Fatalf("Load: %v", err) }
-	if cfg.GitLabBaseURL != "https://gitlab.example.com" || cfg.GitLabToken != "abc" || cfg.DefaultGroupPath != "org" || cfg.DefaultSubfolder != "apps" || !cfg.NonInteractive {
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.GitLabBaseURL != "https://gitlab.example.com" || cfg.DefaultGroupPath != "org" || cfg.DefaultSubfolder != "apps" || !cfg.NonInteractive {
 		t.Fatalf("unexpected values: %#v", cfg)
 	}
 }
 
 func TestConfigDir_HomeResolutionError(t *testing.T) {
-	// Simulate by clearing HOME/USERPROFILE and running on systems where os.UserHomeDir fails.
-	// On most CI this will still succeed, so accept either no error or specific error.
-	// We mainly ensure it doesn't panic.
 	oldHome := os.Getenv("HOME")
 	oldUserProfile := os.Getenv("USERPROFILE")
-	_ = os.Unsetenv("HOME")
-	_ = os.Unsetenv("USERPROFILE")
 	t.Cleanup(func() {
-		_ = os.Setenv("HOME", oldHome)
-		_ = os.Setenv("USERPROFILE", oldUserProfile)
+		if oldHome != "" {
+			os.Setenv("HOME", oldHome)
+		}
+		if oldUserProfile != "" {
+			os.Setenv("USERPROFILE", oldUserProfile)
+		}
 	})
+	os.Unsetenv("HOME")
+	os.Unsetenv("USERPROFILE")
+	os.Unsetenv("REPO_MIGRATOR_CONFIG")
 	_, err := configDir()
-	// err may or may not be non-nil; just ensure error type is wrapped meaningfully if present
 	if err != nil && !errors.Is(err, os.ErrPermission) {
-		// accept any error; this test is only to cover the code path
 		_ = err
 	}
 }

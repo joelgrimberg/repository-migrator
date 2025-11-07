@@ -95,14 +95,88 @@ go mod tidy
 go build -o repository-migrator
 ```
 
+## Repository-local configuration (CI friendly)
+
+Place these files in your repository root (next to `.gitlab-ci.yml`):
+
+```text
+./repository-migrator.config.json
+./repo-list.json
+.gitlab-ci.yml
+```
+
+`repository-migrator.config.json` example:
+
+```json
+{
+  "gitlab_base_url": "https://gitlab.example.com",
+  "default_group_path": "acme/migrations",
+  "default_subfolder": "legacy",
+  "non_interactive": true,
+  "auto_create_subgroups": true,
+  "safe_rebase": true,
+  "overwrite": false,
+  "trial_run": false,
+  "allow_push_default_branch": false
+}
+```
+
+`repo-list.json` example (used for batch migrations):
+
+```json
+{
+  "repos": [
+    {
+      "source_repo_url": "https://github.com/acme/legacy-app.git",
+      "project_name": "legacy-app",
+      "group_path": "acme/migrations",
+      "subfolder": "apps",
+      "safe_rebase": true,
+      "trial_run": true
+    },
+    {
+      "source_repo_url": "git@github.com:acme/tools.git",
+      "project_name": "tools",
+      "group_path": "acme/internal",
+      "overwrite": true,
+      "allow_push_default_branch": true
+    }
+  ]
+}
+```
+
+Run the CLI manually:
+
+```bash
+# Single repository (interactive prompts, token from env)
+GITLAB_TOKEN=glpat-xxxx repository-migrator
+
+# Batch mode (non-interactive)
+GITLAB_TOKEN=glpat-xxxx repository-migrator repo-list.json
+```
+
+### GitLab CI job example
+
+```yaml
+migrate-repos:
+  image: registry.gitlab.com/gitlab-org/ci-cd/curl-jq:latest
+  variables:
+    GITLAB_TOKEN: "$MIGRATOR_TOKEN"  # store the PAT as a masked CI/CD variable
+  script:
+    - curl -sSL https://github.com/joelgrimberg/repository-migrator/releases/download/v1.0.16/repository-migrator_Linux_x86_64.tar.gz | tar -xz
+    - chmod +x repository-migrator
+    - ./repository-migrator repo-list.json
+```
+
+The job reads configuration from `repository-migrator.config.json` in the workspace and uses the `GITLAB_TOKEN` environment variable; the token is never stored on disk.
+
 ## Non-interactive CI usage
 
-Set options via `~/.config/repository-migrator/config.json` and/or environment variables. If `non_interactive` is enabled (or `NON_INTERACTIVE=1`), the CLI will not prompt and will error if required values are missing.
+Set options via `repository-migrator.config.json` in the current working directory and/or environment variables. If `non_interactive` is enabled (or `NON_INTERACTIVE=1`), the CLI will not prompt and will error if required values are missing.
 
-### Config file keys (config.json)
+### Config file keys (repository-migrator.config.json)
 
 - `gitlab_base_url` (string): GitLab base URL
-- `gitlab_token` (string): Personal Access Token
 - `default_group_path` (string, optional): Default group/subgroup path
 - `default_subfolder` (string, optional): Subfolder appended under the group path
 - `non_interactive` (bool, optional): Force non-interactive mode
@@ -115,9 +189,9 @@ Set options via `~/.config/repository-migrator/config.json` and/or environment v
 ### Environment variables
 
 - `GITLAB_BASE_URL`
-- `GITLAB_TOKEN`
+- `GITLAB_TOKEN` (required for both interactive and non-interactive runs; never stored on disk)
 - `NON_INTERACTIVE` (1/true/yes)
-- `SOURCE_REPO_URL` (required in non-interactive mode)
+- `SOURCE_REPO_URL` (required in non-interactive mode when not using repo list)
 - `PROJECT_NAME` (required if it cannot be inferred from `SOURCE_REPO_URL`)
 - `GROUP_PATH` (optional; falls back to config `default_group_path`)
 - `SUBFOLDER` (optional; falls back to config `default_subfolder`)
@@ -126,6 +200,7 @@ Set options via `~/.config/repository-migrator/config.json` and/or environment v
 - `AUTO_CREATE_SUBGROUPS` (1/true/yes)
 - `OVERWRITE` (1/true/yes)
 - `SAFE_REBASE` (1/true/yes)
+- `REPO_LIST_FILE` (set automatically when you invoke `repository-migrator <path>`)
 
 Precedence: environment variables override config; flags still apply unless overridden by env/config.
 
@@ -150,7 +225,7 @@ Notes:
 You will be prompted for:
 
 - GitLab base URL (once; remembered)
-- GitLab Personal Access Token (once; remembered)
+- GitLab Personal Access Token (prompted but not stored; use `GITLAB_TOKEN` env for CI)
 - Source Git repository URL (SSH or HTTPS)
 - Namespace (group/subgroup) and optional subfolder (remembered as default)
 - Trial run? (prints plan only)
@@ -180,9 +255,9 @@ Environment variables (optional):
 
 ## Where configuration is stored
 
-- `~/.config/repository-migrator/config.json`
-  - Saves: GitLab base URL, token, and default group/subgroup path
-  - Token is never printed to screen or logs
+- By default, `repository-migrator.config.json` in the current working directory
+- Fallback: `~/.config/repository-migrator/config.json`
+- Override via `REPO_MIGRATOR_CONFIG`
 
 ## Logs
 
