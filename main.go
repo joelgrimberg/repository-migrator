@@ -38,6 +38,7 @@ func main() {
 }
 
 func run() error {
+	startTime := time.Now()
 	runLogPath, _ := logs.BeginRunLog()
 	logs.SetCurrentRunPath(runLogPath)
 	cfg, err := appcfg.Load()
@@ -482,6 +483,18 @@ func run() error {
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("protected_branch_sync_failed branch=%s err=%v", targetDefaultBranch, err))
 		}
 	}
+
+	duration := time.Since(startTime)
+	mins := int(duration / time.Minute)
+	secs := int(duration/time.Second) % 60
+	durationStr := fmt.Sprintf("%02dm %02ds", mins, secs)
+	coloredDuration := durationStr
+	if duration >= 5*time.Minute {
+		coloredDuration = "\033[31m" + durationStr + "\033[0m"
+	}
+	fmt.Printf("Migration duration for '%s': %s\n", repoName, coloredDuration)
+	logs.AppendRunDetail(runLogPath, fmt.Sprintf("duration=%s", duration.Round(time.Second)))
+
 	return nil
 }
 
