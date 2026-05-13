@@ -90,7 +90,8 @@ sudo mv repository-migrator /usr/local/bin/
 ### Build from source
 
 ```bash
-cd /Users/joel/code/active_projects/gerrit-migrator
+git clone https://github.com/joelgrimberg/repository-migrator.git
+cd repository-migrator
 go mod tidy
 go build -o repository-migrator
 ```
@@ -249,6 +250,12 @@ The tool then creates/reuses the project and migrates according to the selected 
   - Flag: `--overwrite`
   - Mirrors all refs and prunes extra refs on target
 
+- Security CI overlay (per-repo opt-in):
+  - Flag: `--add-security-ci` (or `add_security_ci: true` in a repo-list entry)
+  - After the push, commits a bundled `.gitlab-ci.yml` onto target's default branch so security scans run and feed the GitLab Security Dashboard
+  - Forces overwrite-mirror semantics for this repo (overrides `--safe-rebase`)
+  - See the "Security CI overlay" section below for details
+
 - Subgroup auto-creation:
   - Flag: `--auto-create-subgroups`
   - Default: `true` (will create missing subgroups under the chosen group)
@@ -258,6 +265,64 @@ Environment variables (optional):
 
 - `GITLAB_BASE_URL` – base URL (e.g., `https://gitlab.com`)
 - `GITLAB_TOKEN` – Personal Access Token (scope: api)
+
+## Security CI overlay
+
+Some target repos in GitLab need a `.gitlab-ci.yml` so security scans (SAST, secret detection, dependency scanning) run and feed the GitLab Security Dashboard. The Security Dashboard only ingests scans from the project's **default branch**, so the CI file must live on `main` of target — not a side branch.
+
+Source repos typically don't carry this file (source is the read-only truth). The migrator can therefore commit a bundled `.gitlab-ci.yml` onto target's default branch after each successful push, for repos that opt in.
+
+### Where the template lives
+
+Two options, in precedence order:
+
+1. **Runtime override (recommended for operator setups)** — set `CI_TEMPLATE_FILE=/path/to/your/security-pipeline.yml` (env var) or pass `--ci-template /path/...` on the command line. The migrator reads that file at runtime and commits its contents onto target repos. Edit the file, rerun, no rebuild needed. The path takes precedence over the embedded template; a missing/unreadable path is a hard error, not a silent fallback.
+
+2. **Embedded fallback** — if neither override is set, the migrator uses `templates/security-pipeline.yml` baked into the binary at build time. Edit that file in this repo and rebuild:
+
+   ```bash
+   go build ./...
+   ```
+
+   Pre-built binaries from the APT/YUM repositories carry whatever template shipped with that release.
+
+Each migration's run log records which source was used:
+- `template=embedded:templates/security-pipeline.yml`
+- `template=/some/path/to/security-pipeline.yml`
+
+### Opting a repo in
+
+In a batch repo list, set `add_security_ci: true` on the entries that should receive the overlay:
+
+```json
+{
+  "repos": [
+    { "project_name": "needs-security",   "source_repo_url": "...", "add_security_ci": true  },
+    { "project_name": "no-security-here", "source_repo_url": "..."                            }
+  ]
+}
+```
+
+For single-repo runs, pass `--add-security-ci` on the command line.
+
+### What happens during a migration
+
+1. Code is pushed from source to target (overwrite-mirror is forced when `add_security_ci: true`, so target's default branch always equals `source.main + 1 CI commit`).
+2. The migrator clones target's default branch into a temp directory.
+3. It writes the bundled template into `.gitlab-ci.yml`, replacing any existing copy (a warning is logged when this happens).
+4. It commits with the message `chore(ci): apply security pipeline` (author/committer identity comes from `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` env vars, defaulting to `Repository Migrator <migrator@local>`).
+5. It pushes that single commit to target.
+
+Source repositories are never written to. The overlay only operates on target.
+
+### What gets logged
+
+In the per-run detail log (`~/.config/repository-migrator/runs/run-*.log`):
+
+- `add_security_ci=true push_mode_forced=overwrite-mirror`
+- `ci_overlay_applied=true branch=<name>`
+- `ci_overlay_overwrote_source_file=true` — only when source carried its own `.gitlab-ci.yml` and the bundled template replaced it on target
+- `ci_overlay_failed: <reason>` — on failure
 
 ## Where configuration is stored
 

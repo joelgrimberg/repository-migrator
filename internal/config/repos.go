@@ -16,6 +16,7 @@ type RepoEntry struct {
 	SafeRebase       *bool  `json:"safe_rebase,omitempty"`
 	TrialRun         *bool  `json:"trial_run,omitempty"`
 	AllowPushDefault *bool  `json:"allow_push_default_branch,omitempty"`
+	AddSecurityCI    *bool  `json:"add_security_ci,omitempty"`
 }
 
 type RepoList struct {

@@ -23,6 +23,8 @@ import (
 var autoCreateSubgroups = flag.Bool("auto-create-subgroups", true, "automatically create missing GitLab subgroups without prompting")
 var safeRebaseMode = flag.Bool("safe-rebase", true, "attempt rebase and fast-forward only; stop on conflicts and never overwrite (default)")
 var overwriteMirror = flag.Bool("overwrite", false, "overwrite target by mirroring (git push --mirror --prune)")
+var addSecurityCI = flag.Bool("add-security-ci", false, "after push, commit the bundled .gitlab-ci.yml onto target's default branch (forces overwrite-mirror)")
+var ciTemplateFlag = flag.String("ci-template", "", "path to a .gitlab-ci.yml to overlay; if empty, uses CI_TEMPLATE_FILE env or the bundled template")
 var configPrinted bool
 
 func main() {
@@ -442,9 +444,35 @@ func run() error {
 	if cfg.SafeRebase != nil {
 		safe = *cfg.SafeRebase
 	}
+	applyCI := *addSecurityCI
+	if v, ok := util.EnvBool(os.Getenv("ADD_SECURITY_CI")); ok {
+		applyCI = v
+	}
+	if applyCI {
+		overwrite = true
+		safe = false
+		logs.AppendRunDetail(runLogPath, "add_security_ci=true push_mode_forced=overwrite-mirror")
+	}
 	if !overwrite && safe {
 		logs.AppendRunDetail(runLogPath, "push_mode=safe-rebase")
-		if err := git.SafeRebaseAndPush(ctx, srcURL, targetURL, mirrorDir); err != nil {
+		conflicts, err := git.SafeRebaseAndPush(ctx, srcURL, targetURL, mirrorDir)
+		if len(conflicts) > 0 {
+			fmt.Fprintln(os.Stderr, "ERROR: tag conflicts (source and target disagree on SHA):")
+			for _, c := range conflicts {
+				div, derr := git.TagDivergence(ctx, mirrorDir, c.Name, 20)
+				header := fmt.Sprintf("tag_conflict=%s source=%s target=%s", c.Name, c.SourceSHA, c.TargetSHA)
+				logs.AppendRunDetail(runLogPath, header)
+				fmt.Fprintf(os.Stderr, "  %s\n", header)
+				if derr == nil && strings.TrimSpace(div) != "" {
+					logs.AppendRunDetail(runLogPath, "  divergence (< source-only, > target-only):")
+					for _, line := range strings.Split(div, "\n") {
+						logs.AppendRunDetail(runLogPath, "    "+line)
+						fmt.Fprintf(os.Stderr, "    %s\n", line)
+					}
+				}
+			}
+		}
+		if err != nil {
 			_ = logs.AppendMigrationLog(srcURL, plannedURL, "failed")
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("push_failed: %v", err))
 			return err
@@ -462,6 +490,35 @@ func run() error {
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("push_mirror_failed: %v", err))
 			return err
 		}
+	}
+
+	if applyCI {
+		overlayBranch := strings.TrimSpace(targetDefaultBranch)
+		if overlayBranch == "" {
+			overlayBranch = strings.TrimSpace(defaultBranch)
+		}
+		if overlayBranch == "" {
+			_ = logs.AppendMigrationLog(srcURL, plannedURL, "failed")
+			logs.AppendRunDetail(runLogPath, "ci_overlay_failed: no target branch resolved")
+			return fmt.Errorf("add_security_ci=true but no target default branch could be resolved")
+		}
+		tplBytes, tplSource, terr := resolveCITemplate()
+		if terr != nil {
+			_ = logs.AppendMigrationLog(srcURL, plannedURL, "failed")
+			logs.AppendRunDetail(runLogPath, fmt.Sprintf("ci_template_resolve_failed: %v", terr))
+			return terr
+		}
+		overwrote, err := git.ApplySecurityCIOverlay(ctx, targetURL, overlayBranch, tplBytes, gitIdentityName(), gitIdentityEmail())
+		if err != nil {
+			_ = logs.AppendMigrationLog(srcURL, plannedURL, "failed")
+			logs.AppendRunDetail(runLogPath, fmt.Sprintf("ci_overlay_failed: %v", err))
+			return err
+		}
+		if overwrote {
+			fmt.Println("Warning: source had a .gitlab-ci.yml; the security pipeline template replaced it on target.")
+			logs.AppendRunDetail(runLogPath, "ci_overlay_overwrote_source_file=true")
+		}
+		logs.AppendRunDetail(runLogPath, fmt.Sprintf("ci_overlay_applied=true branch=%s template=%s", overlayBranch, tplSource))
 	}
 
 	fmt.Println("Migration completed successfully.")
@@ -605,6 +662,15 @@ func runBatch(cfg appcfg.AppConfig, listPath string) error {
 			}
 		} else {
 			os.Unsetenv("ALLOW_PUSH_DEFAULT")
+		}
+		if r.AddSecurityCI != nil {
+			if *r.AddSecurityCI {
+				os.Setenv("ADD_SECURITY_CI", "1")
+			} else {
+				os.Setenv("ADD_SECURITY_CI", "0")
+			}
+		} else {
+			os.Unsetenv("ADD_SECURITY_CI")
 		}
 
 		// Execute single migration

@@ -1,1 +1,6 @@
 repository-migrator
+gerrit-migrator
+
+# Runtime logs — should never be committed
+internal/logs/migrations.log
+internal/logs/runs/
