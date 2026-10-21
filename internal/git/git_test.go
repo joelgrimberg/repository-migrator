@@ -321,8 +321,8 @@ func TestApplySecurityCIOverlay_SourceAlreadyMatchesTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplySecurityCIOverlay: %v", err)
 	}
-	if !overwrote {
-		t.Fatalf("expected overwroteSource=true since target already had a .gitlab-ci.yml")
+	if overwrote {
+		t.Fatalf("expected overwroteSource=false: content already matched, nothing was actually replaced")
 	}
 
 	check := filepath.Join(root, "check")
@@ -338,6 +338,41 @@ func TestApplySecurityCIOverlay_SourceAlreadyMatchesTemplate(t *testing.T) {
 	subject := shOut(t, check, "log", "-1", "--pretty=%s")
 	if strings.Contains(subject, "security pipeline") {
 		t.Fatalf("expected no new overlay commit when content already matched, got HEAD subject %q", subject)
+	}
+}
+
+// TestApplySecurityCIOverlay_WarnsOnlyOnActualChange is the direct regression
+// test for the production concern: once source's own distinct .gitlab-ci.yml
+// has been replaced by the template, a subsequent nightly run (no mirror
+// reset in between — the realistic "cron fired again, nothing changed" case)
+// must report overwroteSource=false, since nothing is actually being
+// overwritten anymore. Otherwise the caller's warning fires every night
+// forever even after reaching steady state.
+func TestApplySecurityCIOverlay_WarnsOnlyOnActualChange(t *testing.T) {
+	root := t.TempDir()
+	src := initRepoWithCommit(t, root)
+	commitFile(t, src, ".gitlab-ci.yml", "stages: [build]\nbuild: { script: 'echo source' }\n", "ci: source pipeline")
+	tgt := initBareRepo(t, root)
+	seedTargetFromSource(t, src, tgt)
+
+	template := []byte("include:\n  - template: Security/SAST.gitlab-ci.yml\n")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	overwrote, err := ApplySecurityCIOverlay(ctx, tgt, "main", template, "Repository Migrator", "migrator@local")
+	if err != nil {
+		t.Fatalf("first overlay: %v", err)
+	}
+	if !overwrote {
+		t.Fatalf("expected overwrote=true on first run: source's distinct CI file was genuinely replaced")
+	}
+
+	overwrote, err = ApplySecurityCIOverlay(ctx, tgt, "main", template, "Repository Migrator", "migrator@local")
+	if err != nil {
+		t.Fatalf("second overlay: %v", err)
+	}
+	if overwrote {
+		t.Fatalf("expected overwrote=false on second run: content already matches the template, nothing to replace")
 	}
 }
 
