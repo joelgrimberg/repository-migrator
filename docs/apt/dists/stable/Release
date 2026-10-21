@@ -1,7 +1,7 @@
 Origin: repository-migrator
 Label: repository-migrator
 Codename: stable
-Date: Wed, 21 Oct 2026 07:03:25 UTC
+Date: Wed, 21 Oct 2026 13:04:01 UTC
 Architectures: amd64 arm64
 Components: main
 Description: Repository Migrator APT repo
@@ -9,20 +9,20 @@ MD5Sum:
  d41d8cd98f00b204e9800998ecf8427e 0 main/binary-amd64/Packages
  7029066c27ac6f5ef18d660d5741979a 20 main/binary-amd64/Packages.gz
  a7dbdbb71c04b5df6dbe9af37611e663 133 main/binary-amd64/Release
- 395333bfc49cfe60e3dbe5cbd12a5276 585 main/binary-arm64/Packages
- 4419593451bf7181751d01ce5165a4a6 404 main/binary-arm64/Packages.gz
+ 2b38907127fedc9bb8a58bd7c26c32fb 585 main/binary-arm64/Packages
+ 3d3807f4b3b9bb926343684f2a289f5d 402 main/binary-arm64/Packages.gz
  894a60f61c7e97a4180ae5a49a2a3e77 133 main/binary-arm64/Release
 SHA1:
  da39a3ee5e6b4b0d3255bfef95601890afd80709 0 main/binary-amd64/Packages
  46c6643f07aa7f6bfe7118de926b86defc5087c4 20 main/binary-amd64/Packages.gz
  70c64bea28454c9101925f6a2b3f97e7f0be0636 133 main/binary-amd64/Release
- fcc77d0ee5ae41aabeee7fee90f560aca4ae57fd 585 main/binary-arm64/Packages
- bc3626058f9507a6e032c3c372b5b1a1d01f090c 404 main/binary-arm64/Packages.gz
+ 97a60fc3675729c9cca9220def4b2944468ba882 585 main/binary-arm64/Packages
+ 152122e497f9e1456aed053904c992e51d73fbc7 402 main/binary-arm64/Packages.gz
  384f395157f0ae900fdcab8c55473202a44ae89c 133 main/binary-arm64/Release
 SHA256:
  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/binary-amd64/Packages
  59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2 20 main/binary-amd64/Packages.gz
  bcd3fb294a86ab8640ab69f88f17f27353d36546f3a079ad2b623f3af7995b0a 133 main/binary-amd64/Release
- 087db39c8606775d8cde3ea6a75c097069c8607db25386a8787378d365165bd9 585 main/binary-arm64/Packages
- efb5c298bd1737817fab694e287ce92be76c0a417025e4678fb99e89831a042a 404 main/binary-arm64/Packages.gz
+ 10a99591fb4fa8d080df53985c37ad3da4b7402e112e24f882b7c99983e074b7 585 main/binary-arm64/Packages
+ 2f91fa0efc086441f707e494315926104ea625472082e732b94cee28d316d55a 402 main/binary-arm64/Packages.gz
  6e83823aa07d8b125f9cdd0b923374fc8bca959ccacee56ba02b90305543825a 133 main/binary-arm64/Release
