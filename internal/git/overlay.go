@@ -2,8 +2,10 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -51,6 +53,17 @@ func ApplySecurityCIOverlay(
 	if err := run(ctx, workDir, "add", ciOverlayFilename); err != nil {
 		return overwroteSource, err
 	}
+
+	staged, err := hasStagedChanges(ctx, workDir)
+	if err != nil {
+		return overwroteSource, err
+	}
+	if !staged {
+		// Target's .gitlab-ci.yml already matches ciContent (e.g. source
+		// carries the same template directly) — nothing to commit or push.
+		return overwroteSource, nil
+	}
+
 	if err := run(ctx, workDir, "commit", "-m", "chore(ci): apply security pipeline"); err != nil {
 		return overwroteSource, err
 	}
@@ -58,4 +71,19 @@ func ApplySecurityCIOverlay(
 		return overwroteSource, fmt.Errorf("push CI overlay: %w", err)
 	}
 	return overwroteSource, nil
+}
+
+// hasStagedChanges reports whether workDir's index differs from HEAD.
+func hasStagedChanges(ctx context.Context, workDir string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "git", "diff", "--cached", "--quiet")
+	cmd.Dir = workDir
+	err := cmd.Run()
+	if err == nil {
+		return false, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return true, nil
+	}
+	return false, fmt.Errorf("git diff --cached --quiet: %w", err)
 }

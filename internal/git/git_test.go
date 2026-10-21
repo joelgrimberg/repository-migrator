@@ -298,6 +298,49 @@ func TestApplySecurityCIOverlay_SourceHadCI(t *testing.T) {
 	}
 }
 
+// TestApplySecurityCIOverlay_SourceAlreadyMatchesTemplate reproduces the
+// production dmx/m4000qt failure: source already carries its own
+// .gitlab-ci.yml whose content happens to be byte-identical to the bundled
+// template (e.g. someone wired up the same SAST/Secret-Detection/Dependency-
+// Scanning template directly in source). After the mirror step, target's
+// file already matches what the overlay would write, so there is nothing to
+// stage or commit. This must be treated as "already applied", not a failure.
+func TestApplySecurityCIOverlay_SourceAlreadyMatchesTemplate(t *testing.T) {
+	root := t.TempDir()
+	src := initRepoWithCommit(t, root)
+	template := []byte("include:\n  - template: Security/SAST.gitlab-ci.yml\n")
+	// source's own .gitlab-ci.yml is already identical to the template.
+	commitFile(t, src, ".gitlab-ci.yml", string(template), "ci: matches security template")
+	tgt := initBareRepo(t, root)
+	seedTargetFromSource(t, src, tgt)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	overwrote, err := ApplySecurityCIOverlay(ctx, tgt, "main", template, "Repository Migrator", "migrator@local")
+	if err != nil {
+		t.Fatalf("ApplySecurityCIOverlay: %v", err)
+	}
+	if !overwrote {
+		t.Fatalf("expected overwroteSource=true since target already had a .gitlab-ci.yml")
+	}
+
+	check := filepath.Join(root, "check")
+	sh(t, root, "clone", "--branch", "main", tgt, check)
+	content, err := os.ReadFile(filepath.Join(check, ".gitlab-ci.yml"))
+	if err != nil {
+		t.Fatalf("read .gitlab-ci.yml on target: %v", err)
+	}
+	if string(content) != string(template) {
+		t.Fatalf(".gitlab-ci.yml content mismatch:\n got: %q\nwant: %q", string(content), string(template))
+	}
+	// No new commit should have been created: HEAD is still the source commit.
+	subject := shOut(t, check, "log", "-1", "--pretty=%s")
+	if strings.Contains(subject, "security pipeline") {
+		t.Fatalf("expected no new overlay commit when content already matched, got HEAD subject %q", subject)
+	}
+}
+
 // TestApplySecurityCIOverlay_AfterMirrorReset simulates a re-sync: the
 // pipeline force-pushes source over target (wiping the previous overlay's
 // CI commit), then runs the overlay again. Each sync should produce a fresh
