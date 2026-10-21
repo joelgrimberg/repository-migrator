@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,12 +14,27 @@ import (
 	"strings"
 	"time"
 
+	charmlog "github.com/charmbracelet/log"
+	"github.com/muesli/termenv"
+
 	appcfg "repository-migrator/internal/config"
 	"repository-migrator/internal/git"
 	gl "repository-migrator/internal/gitlab"
 	"repository-migrator/internal/logs"
 	"repository-migrator/internal/util"
 )
+
+// warnLogger prints colorized warnings. GitLab CI's captured job output
+// isn't a real TTY, but GitLab's log viewer renders ANSI escape codes
+// (that's how pipeline stage indicators show color), so the color profile
+// is forced on rather than left to termenv's TTY auto-detection.
+var warnLogger = newWarnLogger(os.Stderr)
+
+func newWarnLogger(w io.Writer) *charmlog.Logger {
+	l := charmlog.NewWithOptions(w, charmlog.Options{ReportTimestamp: false})
+	l.SetColorProfile(termenv.TrueColor)
+	return l
+}
 
 var autoCreateSubgroups = flag.Bool("auto-create-subgroups", true, "automatically create missing GitLab subgroups without prompting")
 var safeRebaseMode = flag.Bool("safe-rebase", true, "attempt rebase and fast-forward only; stop on conflicts and never overwrite (default)")
@@ -515,7 +531,7 @@ func run() error {
 			return err
 		}
 		if overwrote {
-			fmt.Println("Warning: source had a .gitlab-ci.yml; the security pipeline template replaced it on target.")
+			warnLogger.Warn("source had a .gitlab-ci.yml; the security pipeline template replaced it on target")
 			logs.AppendRunDetail(runLogPath, "ci_overlay_overwrote_source_file=true")
 		}
 		logs.AppendRunDetail(runLogPath, fmt.Sprintf("ci_overlay_applied=true branch=%s template=%s", overlayBranch, tplSource))
@@ -529,14 +545,14 @@ func run() error {
 	}
 	if targetDefaultBranch != "" {
 		if err := client.SetDefaultBranch(project.ID, targetDefaultBranch); err != nil {
-			fmt.Printf("Warning: failed to set default branch to %s: %v\n", targetDefaultBranch, err)
+			warnLogger.Warn("failed to set default branch", "branch", targetDefaultBranch, "err", err)
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("set_default_branch_failed branch=%s err=%v", targetDefaultBranch, err))
 		} else {
 			fmt.Printf("Default branch set to %s\n", targetDefaultBranch)
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("set_default_branch=%s", targetDefaultBranch))
 		}
 		if err := ensureProtectedBranch(client, project.ID, targetDefaultBranch); err != nil {
-			fmt.Printf("Warning: failed to enforce protected branch %s: %v\n", targetDefaultBranch, err)
+			warnLogger.Warn("failed to enforce protected branch", "branch", targetDefaultBranch, "err", err)
 			logs.AppendRunDetail(runLogPath, fmt.Sprintf("protected_branch_sync_failed branch=%s err=%v", targetDefaultBranch, err))
 		}
 	}

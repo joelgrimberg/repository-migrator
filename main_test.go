@@ -1,9 +1,31 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
+
+// TestNewWarnLogger_ColorsWarnings verifies that the warn logger colors its
+// output even when writing to a non-TTY (e.g. a bytes.Buffer, like GitLab
+// CI's captured job output), since forced coloring is what makes the
+// warning visible in GitLab's ANSI-rendering job log viewer.
+func TestNewWarnLogger_ColorsWarnings(t *testing.T) {
+	var buf bytes.Buffer
+	l := newWarnLogger(&buf)
+	l.Warn("source had a .gitlab-ci.yml; the security pipeline template replaced it on target")
+
+	out := buf.String()
+	if !strings.Contains(out, "WARN") {
+		t.Fatalf("expected WARN level in output, got %q", out)
+	}
+	if !strings.Contains(out, "source had a .gitlab-ci.yml") {
+		t.Fatalf("expected message in output, got %q", out)
+	}
+	if !strings.Contains(out, "\x1b[") {
+		t.Fatalf("expected ANSI color escape codes even though output isn't a TTY, got %q", out)
+	}
+}
 
 func TestValidateBaseURL(t *testing.T) {
 	cases := []struct {
