@@ -55,6 +55,44 @@ func main() {
 	}
 }
 
+// mergeNamespacePath joins a base namespace path with an optional subfolder
+// into the full path used as a push target (e.g. "group" + "archive" ->
+// "group/archive"). Leading/trailing slashes on either input are trimmed.
+func mergeNamespacePath(base, subfolder string) string {
+	base = strings.Trim(base, "/")
+	subfolder = strings.Trim(subfolder, "/")
+	if subfolder == "" {
+		return base
+	}
+	return strings.Trim(base+"/"+subfolder, "/")
+}
+
+// resolveNamespacePath resolves the full push-target namespace path from
+// env vars, falling back to persisted config defaults, and separately
+// returns the base path (without the subfolder) that should be persisted
+// back as the new default group path.
+//
+// The base path must never include the subfolder: this is what's saved to
+// cfg.DefaultGroupPath after each run, and batch migrations re-resolve this
+// from disk for every repo. Persisting the merged path previously caused a
+// repo relying on the default (no explicit group_path) to merge its own
+// subfolder on top of the already-merged default, stacking one extra
+// subfolder segment per repo processed (e.g.
+// "group/archive" -> "group/archive/archive" -> .../archive/archive).
+func resolveNamespacePath(envGroupPath, envSubfolder, cfgGroupPath, cfgSubfolder string) (fullPath, basePath string) {
+	nsPath := strings.TrimSpace(envGroupPath)
+	if nsPath == "" {
+		nsPath = cfgGroupPath
+	}
+	subfolder := strings.TrimSpace(envSubfolder)
+	if subfolder == "" {
+		subfolder = cfgSubfolder
+	}
+	basePath = strings.Trim(nsPath, "/")
+	fullPath = mergeNamespacePath(basePath, subfolder)
+	return fullPath, basePath
+}
+
 func run() error {
 	startTime := time.Now()
 	runLogPath, _ := logs.BeginRunLog()
@@ -191,20 +229,9 @@ func run() error {
 	}
 	// Collect target namespace path (from env/config) with optional subfolder; no confirmation in non-interactive
 	var groupPath string
+	var baseGroupPath string
 	if nonInteractive {
-		nsPath := strings.TrimSpace(os.Getenv("GROUP_PATH"))
-		if nsPath == "" {
-			nsPath = cfg.DefaultGroupPath
-		}
-		subfolder := strings.TrimSpace(os.Getenv("SUBFOLDER"))
-		if subfolder == "" {
-			subfolder = cfg.DefaultSubfolder
-		}
-		candidate := strings.Trim(nsPath, "/")
-		if strings.TrimSpace(subfolder) != "" {
-			candidate = strings.Trim(candidate+"/"+strings.Trim(subfolder, "/"), "/")
-		}
-		groupPath = candidate
+		groupPath, baseGroupPath = resolveNamespacePath(os.Getenv("GROUP_PATH"), os.Getenv("SUBFOLDER"), cfg.DefaultGroupPath, cfg.DefaultSubfolder)
 	} else {
 		for {
 			nsPath, err := util.PromptWithDefault("Namespace (group/subgroup) full path (blank for personal namespace)", cfg.DefaultGroupPath)
@@ -215,10 +242,7 @@ func run() error {
 			if err != nil {
 				return err
 			}
-			candidate := strings.Trim(nsPath, "/")
-			if strings.TrimSpace(subfolder) != "" {
-				candidate = strings.Trim(candidate+"/"+strings.Trim(subfolder, "/"), "/")
-			}
+			candidate := mergeNamespacePath(nsPath, subfolder)
 			previewNamespace := candidate
 			if previewNamespace == "" {
 				previewNamespace = user.Username
@@ -232,6 +256,7 @@ func run() error {
 				continue
 			}
 			groupPath = candidate
+			baseGroupPath = strings.Trim(nsPath, "/")
 			break
 		}
 	}
@@ -247,7 +272,7 @@ func run() error {
 	}
 
 	// Persist chosen group as default for next time
-	cfg.DefaultGroupPath = strings.TrimSpace(groupPath)
+	cfg.DefaultGroupPath = baseGroupPath
 	if err := appcfg.Save(cfg); err != nil {
 		return err
 	}
@@ -418,7 +443,7 @@ func run() error {
 	}
 
 	// Save chosen group path as default for next time (no-op if blank)
-	cfg.DefaultGroupPath = strings.TrimSpace(groupPath)
+	cfg.DefaultGroupPath = baseGroupPath
 	if err := appcfg.Save(cfg); err != nil {
 		return err
 	}

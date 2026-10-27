@@ -84,7 +84,7 @@ func TestInferRepoName(t *testing.T) {
 		{"HTTPS without .git", "https://gitlab.com/user/my-repo", "my-repo"},
 		{"HTTPS with path", "https://gitlab.com/group/subgroup/repo.git", "repo"},
 		{"empty", "", ""},
-    {"invalid-like string (parsed as path)", "not-a-url", "not-a-url"},
+		{"invalid-like string (parsed as path)", "not-a-url", "not-a-url"},
 		{"root path", "https://gitlab.com/", ""},
 	}
 	for _, tc := range cases {
@@ -197,3 +197,57 @@ func TestSanitizeProjectName(t *testing.T) {
 // Note: addTokenToHTTPURL relies on url.Parse which accepts path-only
 // strings without error; invalid-URL tests are not applicable here.
 
+func TestResolveNamespacePath(t *testing.T) {
+	cases := []struct {
+		name         string
+		envGroupPath string
+		envSubfolder string
+		cfgGroupPath string
+		cfgSubfolder string
+		wantFull     string
+		wantBase     string
+	}{
+		{"env group, env subfolder", "distributionmanager", "archive", "", "", "distributionmanager/archive", "distributionmanager"},
+		{"falls back to cfg group", "", "archive", "distributionmanager", "", "distributionmanager/archive", "distributionmanager"},
+		{"falls back to cfg subfolder", "distributionmanager", "", "", "archive", "distributionmanager/archive", "distributionmanager"},
+		{"no subfolder", "distributionmanager", "", "", "", "distributionmanager", "distributionmanager"},
+		{"strips slashes", "/distributionmanager/", "/archive/", "", "", "distributionmanager/archive", "distributionmanager"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			full, base := resolveNamespacePath(tc.envGroupPath, tc.envSubfolder, tc.cfgGroupPath, tc.cfgSubfolder)
+			if full != tc.wantFull {
+				t.Fatalf("full = %q want %q", full, tc.wantFull)
+			}
+			if base != tc.wantBase {
+				t.Fatalf("base = %q want %q", base, tc.wantBase)
+			}
+		})
+	}
+}
+
+// TestResolveNamespacePath_DoesNotCompoundAcrossRuns is a regression test for
+// a bug where the subfolder-merged path (e.g. "distributionmanager/archive")
+// was persisted back as the new default group path. Since batch migrations
+// re-resolve this from the persisted config for every repo, a repo entry
+// that applies the same subfolder again (explicitly or via a config default)
+// would stack another copy of the subfolder on top each time, producing
+// paths like "distributionmanager/archive/archive/archive". The base path
+// returned here must stay stable even when fed back in as the next "run"'s
+// cfgGroupPath, since that's exactly what persisting it to disk does.
+func TestResolveNamespacePath_DoesNotCompoundAcrossRuns(t *testing.T) {
+	full1, base1 := resolveNamespacePath("", "archive", "distributionmanager", "")
+	if full1 != "distributionmanager/archive" {
+		t.Fatalf("run 1: full = %q want %q", full1, "distributionmanager/archive")
+	}
+
+	// Simulate persisting base1 to disk and a second repo in the batch
+	// relying on the same (now-persisted) default group path + subfolder.
+	full2, base2 := resolveNamespacePath("", "archive", base1, "")
+	if full2 != "distributionmanager/archive" {
+		t.Fatalf("subfolder compounded across runs: full2 = %q want %q", full2, "distributionmanager/archive")
+	}
+	if base2 != base1 {
+		t.Fatalf("base path drifted across runs: base2 = %q want %q", base2, base1)
+	}
+}
